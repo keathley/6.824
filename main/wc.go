@@ -2,17 +2,39 @@ package main
 
 import "os"
 import "fmt"
+import "strings"
+import "unicode"
+import "strconv"
 import "github.com/keathley/6.824/mapreduce"
 import "container/list"
+
+func punctuation(r rune) bool {
+	return ! unicode.IsLetter(r) && ! unicode.IsNumber(r);
+}
 
 // our simplified version of MapReduce does not supply a
 // key to the Map function, as in the paper; only a value,
 // which is a part of the input file contents
 func Map(value string) *list.List {
+	var wordCounts list.List
+	var words = strings.Fields(value)
+	for _, word := range words {
+		var kv mapreduce.KeyValue
+		kv.Key = string(strings.TrimFunc(word, punctuation))
+		kv.Value = "1"
+		wordCounts.PushBack(kv)
+	}
+	return &wordCounts
 }
 
 // iterate over list and add values
 func Reduce(key string, values *list.List) string {
+	var count int
+	for e := values.Front(); e != nil; e = e.Next() {
+		var lineCount, _ = strconv.Atoi(e.Value.(string))
+	  count += lineCount
+	}
+	return strconv.Itoa(count)
 }
 
 // Can be run in 3 ways:
