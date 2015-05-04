@@ -27,6 +27,7 @@ func Map(value string) *list.List {
 // iterate over list and add values
 func Reduce(key string, values *list.List) string {
 	result := 0
+
 	for e := values.Front(); e != nil; e = e.Next() {
 		v := e.Value.(string)
 		num, _ := strconv.Atoi(v)
