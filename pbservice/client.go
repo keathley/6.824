@@ -1,6 +1,6 @@
 package pbservice
 
-import "viewservice"
+import "github.com/keathley/6.824/viewservice"
 import "net/rpc"
 import "fmt"
 
@@ -9,22 +9,18 @@ import "fmt"
 // import "crypto/rand"
 // import "math/big"
 
-
-
 type Clerk struct {
-  vs *viewservice.Clerk
-  // Your declarations here
+	vs *viewservice.Clerk
+	// Your declarations here
 }
-
 
 func MakeClerk(vshost string, me string) *Clerk {
-  ck := new(Clerk)
-  ck.vs = viewservice.MakeClerk(me, vshost)
-  // Your ck.* initializations here
+	ck := new(Clerk)
+	ck.vs = viewservice.MakeClerk(me, vshost)
+	// Your ck.* initializations here
 
-  return ck
+	return ck
 }
-
 
 //
 // call() sends an RPC to the rpcname handler on server srv
@@ -43,20 +39,20 @@ func MakeClerk(vshost string, me string) *Clerk {
 // please don't change this function.
 //
 func call(srv string, rpcname string,
-          args interface{}, reply interface{}) bool {
-  c, errx := rpc.Dial("unix", srv)
-  if errx != nil {
-    return false
-  }
-  defer c.Close()
-    
-  err := c.Call(rpcname, args, reply)
-  if err == nil {
-    return true
-  }
+	args interface{}, reply interface{}) bool {
+	c, errx := rpc.Dial("unix", srv)
+	if errx != nil {
+		return false
+	}
+	defer c.Close()
 
-  fmt.Println(err)
-  return false
+	err := c.Call(rpcname, args, reply)
+	if err == nil {
+		return true
+	}
+
+	fmt.Println(err)
+	return false
 }
 
 //
@@ -68,9 +64,9 @@ func call(srv string, rpcname string,
 //
 func (ck *Clerk) Get(key string) string {
 
-  // Your code here.
+	// Your code here.
 
-  return "???"
+	return "???"
 }
 
 //
@@ -79,14 +75,14 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
 
-  // Your code here.
-  return "???"
+	// Your code here.
+	return "???"
 }
 
 func (ck *Clerk) Put(key string, value string) {
-  ck.PutExt(key, value, false)
+	ck.PutExt(key, value, false)
 }
 func (ck *Clerk) PutHash(key string, value string) string {
-  v := ck.PutExt(key, value, true)
-  return v
+	v := ck.PutExt(key, value, true)
+	return v
 }
