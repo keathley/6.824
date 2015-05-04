@@ -4,15 +4,42 @@ import "os"
 import "fmt"
 import "github.com/keathley/6.824/mapreduce"
 import "container/list"
+import "unicode"
+import "strings"
+import "strconv"
 
-// our simplified version of MapReduce does not supply a
+// Map lists each word in a document.
+// Our simplified version of MapReduce does not supply a
 // key to the Map function, as in the paper; only a value,
-// which is a part of the input file contents
+// which is a part of the input file contents.
+// key: document name
+// value: document contents
+// for each word w in value:
+//   EmitIntermediate(w, "1");
 func Map(value string) *list.List {
+	l := list.New()
+	// A word is defined as any contiguous sequence of letters
+	f := func(c rune) bool { return !unicode.IsLetter(c) }
+	for _, w := range strings.FieldsFunc(value, f) {
+		l.PushFront(mapreduce.KeyValue{w, "1"})
+	}
+	return l
 }
 
-// iterate over list and add values
+// Reduce iterates over list and adds values.
+// key: a word
+// values: a list of counts
+// int result = 0;
+// for each v in values:
+//   result += ParseInt(v);
+// Emit(AsString(result));
 func Reduce(key string, values *list.List) string {
+	r := 0
+	for v := values.Front(); v != nil; v = v.Next() {
+		n, _ := strconv.ParseInt(v.Value.(string), 0, 0)
+		r += int(n)
+	}
+	return strconv.Itoa(r)
 }
 
 // Can be run in 3 ways:
