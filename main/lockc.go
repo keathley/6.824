@@ -4,7 +4,7 @@ package main
 // see comments in lockd.go
 //
 
-import "lockservice"
+import "github.com/keathley/6.824/lockservice"
 import "os"
 import "fmt"
 
