@@ -61,7 +61,7 @@ type MapReduce struct {
 	stats           *list.List
 
 	// Map of registered workers that you need to keep up to date
-	Workers map[string]*WorkerInfo
+	Workers []*WorkerInfo
 
 	// add any additional state here
 }
