@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"fmt"
 	"sync"
-	//	"math/rand"
 )
 
 type WorkerInfo struct {
@@ -36,7 +35,6 @@ func (mr *MapReduce) RunMaster() *list.List {
 
 	mapChan := make(chan int, mr.nMap)
 	mappedChan := make(chan int, mr.nMap)
-	//	doneChan := make(chan int)
 
 	for maps := 0; maps < mr.nMap; maps++ {
 		go func(jobNum int) {
