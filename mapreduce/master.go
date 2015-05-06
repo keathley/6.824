@@ -7,8 +7,7 @@ import (
 )
 
 type WorkerInfo struct {
-	address  string
-	avaiable bool
+	address string
 	// You can add definitions here.
 }
 
