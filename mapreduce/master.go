@@ -3,7 +3,6 @@ package mapreduce
 import (
 	"container/list"
 	"fmt"
-	"sync"
 )
 
 type WorkerInfo struct {
@@ -30,53 +29,57 @@ func (mr *MapReduce) KillWorkers() *list.List {
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
-	// Your code here
-
-	mapChan := make(chan int, mr.nMap)
-	mappedChan := make(chan int, mr.nMap)
+	done := make(chan int)
 
 	for maps := 0; maps < mr.nMap; maps++ {
 		go func(jobNum int) {
-			worker := GetNextWorker(mr)
-			mapChan <- 1
-			repl := &DoJobReply{}
-			SendJob(mr, worker, Map, jobNum, mr.nReduce, repl)
-			mappedChan <- 1
+			WorkUntilComplete(mr, Map, jobNum, mr.nReduce, done)
 		}(maps)
 	}
 
 	// reduce jobs
-	var wg sync.WaitGroup
 	for reduces := 0; reduces < mr.nReduce; reduces++ {
-		wg.Add(1)
 		go func(jobNum int) {
-			defer wg.Done()
-			worker := GetNextWorker(mr)
-			repl := &DoJobReply{}
-			SendJob(mr, worker, Reduce, jobNum, mr.nMap, repl)
+			WorkUntilComplete(mr, Reduce, jobNum, mr.nMap, done)
 		}(reduces)
 	}
 
-	wg.Wait()
+	<-done
 	return mr.KillWorkers()
+}
+
+func WorkUntilComplete(mr *MapReduce, op JobType, jobNum int, others int, done chan int) {
+	reply := &DoJobReply{}
+	worker := GetNextWorker(mr)
+	fmt.Printf("Sending job %d\n", jobNum)
+	rpcResp := SendJob(mr, worker, op, jobNum, others, reply, done)
+	if !rpcResp || !reply.OK {
+		WorkUntilComplete(mr, op, jobNum, others, done)
+	}
 }
 
 func GetNextWorker(mr *MapReduce) string {
 	return <-mr.registerChannel
 }
 
-func SendJob(mr *MapReduce, worker string, op JobType, jobNum int, others int, repl *DoJobReply) {
+func SendJob(mr *MapReduce, worker string, op JobType, jobNum int, others int, repl *DoJobReply, done chan int) bool {
 	args := &DoJobArgs{
 		File:          mr.file,
 		Operation:     op,
 		JobNumber:     jobNum,
 		NumOtherPhase: others,
 	}
-	call(worker, "Worker.DoJob", args, repl)
-	select {
-	case mr.registerChannel <- worker:
-		// add it and move on
-	default:
-		// just return
+	resp := call(worker, "Worker.DoJob", args, repl)
+	if resp && repl.OK {
+		select {
+		case mr.registerChannel <- worker:
+			// re-register it and move on
+		default:
+			// no more workers being requested: we're done
+			done <- 1
+		}
+	} else {
+		fmt.Printf("FAILURE: job %d\n", jobNum)
 	}
+	return resp
 }
