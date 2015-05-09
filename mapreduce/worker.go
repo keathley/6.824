@@ -20,9 +20,9 @@ type Worker struct {
 
 // The master sent us a job
 func (wk *Worker) DoJob(arg *DoJobArgs, res *DoJobReply) error {
-	fmt.Printf("Dojob %s job %d file %s operation %v N %d\n",
-		wk.name, arg.JobNumber, arg.File, arg.Operation,
-		arg.NumOtherPhase)
+	//	fmt.Printf("Dojob %s job %d file %s operation %v N %d\n",
+	//		wk.name, arg.JobNumber, arg.File, arg.Operation,
+	//		arg.NumOtherPhase)
 	switch arg.Operation {
 	case Map:
 		DoMap(arg.JobNumber, arg.File, arg.NumOtherPhase, wk.Map)
