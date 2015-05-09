@@ -74,6 +74,7 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.file = file
 	mr.MasterAddress = master
 	mr.alive = true
+	// XXX It's worth noting that this buffering masks a potential deadlock in the master (if more than 1000 workers are present, SendJob can block at the end of the Map phase waiting to re-register the last worker)
 	mr.registerChannel = make(chan string, 1000)
 	mr.DoneChannel = make(chan bool)
 
