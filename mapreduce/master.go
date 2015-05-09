@@ -29,28 +29,24 @@ func (mr *MapReduce) KillWorkers() *list.List {
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
-	done := make(chan int)
-
 	mapChan := make(chan int, mr.nMap)
 	mappedChan := make(chan int, mr.nMap)
 	fillBuffer(mapChan, mr.nMap)
 	for m := range mapChan {
 		go func(jobNum int) {
-			WorkUntilComplete(mr, Map, jobNum, mr.nMap, mr.nReduce, mapChan, mappedChan, done)
+			WorkUntilComplete(mr, Map, jobNum, mr.nMap, mr.nReduce, mapChan, mappedChan)
 		}(m)
 	}
-	<-done
-	DPrintf("Value received from done channel\n.")
+
 	reduceChan := make(chan int, mr.nReduce)
 	reducedChan := make(chan int, mr.nReduce)
 	fillBuffer(reduceChan, mr.nReduce)
 	for r := range reduceChan {
 		go func(jobNum int) {
-			WorkUntilComplete(mr, Reduce, jobNum, mr.nReduce, mr.nMap, reduceChan, reducedChan, done)
+			WorkUntilComplete(mr, Reduce, jobNum, mr.nReduce, mr.nMap, reduceChan, reducedChan)
 		}(r)
 	}
 
-	<-done
 	return mr.KillWorkers()
 }
 
@@ -60,21 +56,20 @@ func fillBuffer(buff chan int, num int) {
 	}
 }
 
-func WorkUntilComplete(mr *MapReduce, op JobType, jobNum int, lastJob int, others int, jobChan chan int, completedChan chan int, done chan int) {
+func WorkUntilComplete(mr *MapReduce, op JobType, jobNum int, lastJob int, others int, jobChan chan int, completedChan chan int) {
 	reply := &DoJobReply{}
 	worker := GetNextWorker(mr)
 	DPrintf("Sending %s job %d\n", op, jobNum)
-	rpcResp := SendJob(mr, worker, op, jobNum, others, reply, jobChan, done)
+	rpcResp := SendJob(mr, worker, op, jobNum, others, reply, jobChan)
 	if rpcResp && reply.OK {
 		completedChan <- jobNum
 		DPrintf("%s job %d/%d completed successfully...channel now has %d jobs\n", op, jobNum, lastJob, len(completedChan))
 		if len(completedChan) == lastJob {
 			DPrintf("Closing job channel \n")
 			close(jobChan)
-			done <- 1
 		}
 	} else {
-		WorkUntilComplete(mr, op, jobNum, lastJob, others, jobChan, completedChan, done)
+		WorkUntilComplete(mr, op, jobNum, lastJob, others, jobChan, completedChan)
 	}
 }
 
@@ -82,7 +77,7 @@ func GetNextWorker(mr *MapReduce) string {
 	return <-mr.registerChannel
 }
 
-func SendJob(mr *MapReduce, worker string, op JobType, jobNum int, others int, repl *DoJobReply, jobChan chan int, done chan int) bool {
+func SendJob(mr *MapReduce, worker string, op JobType, jobNum int, others int, repl *DoJobReply, jobChan chan int) bool {
 	args := &DoJobArgs{
 		File:          mr.file,
 		Operation:     op,
