@@ -31,22 +31,15 @@ func (mr *MapReduce) KillWorkers() *list.List {
 
 func (mr *MapReduce) RunMaster() *list.List {
 	for mapJobId := 0; mapJobId < mr.nMap; mapJobId++ {
-		go func(jobId int) {
-			mr.SendJob(jobId, Map, mr.nReduce)
-		}(mapJobId)
+		go mr.SendMapJob(mapJobId)
 	}
 
 	for reduceJobId := 0; reduceJobId < mr.nReduce; reduceJobId++ {
 		mr.wgReduce.Add(1)
-		go func(jobId int) {
-			defer mr.wgReduce.Done()
-			mr.SendReduceJob(jobId)
-		}(reduceJobId)
+		go mr.SendReduceJob(reduceJobId)
 	}
 
-	fmt.Println("Waiting for jobs to finish")
 	mr.wgReduce.Wait()
-	fmt.Println("Finished")
 
 	return mr.KillWorkers()
 }
@@ -56,6 +49,7 @@ func (mr *MapReduce) SendMapJob(jobId int) {
 }
 
 func (mr *MapReduce) SendReduceJob(jobId int) {
+	defer mr.wgReduce.Done()
 	mr.SendJob(jobId, Reduce, mr.nMap)
 }
 
@@ -72,7 +66,6 @@ func (mr *MapReduce) SendJob(jobId int, operation JobType, otherCount int) {
 	ok := call(worker, "Worker.DoJob", args, reply)
 
 	if ok && reply.OK == true {
-		fmt.Println("Worker is done", operation, jobId, reply, ok)
 		select {
 		case mr.registerChannel <- worker:
 		default:

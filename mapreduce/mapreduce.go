@@ -66,8 +66,6 @@ type MapReduce struct {
 
 	// add any additional state here
 	wgReduce sync.WaitGroup
-	reducers int
-	mappers  int
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -80,9 +78,6 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.alive = true
 	mr.registerChannel = make(chan string)
 	mr.DoneChannel = make(chan bool)
-
-	mr.reducers = 0
-	mr.mappers = 0
 
 	return mr
 }
