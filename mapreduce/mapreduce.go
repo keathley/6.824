@@ -11,6 +11,7 @@ import "net/rpc"
 import "net"
 import "bufio"
 import "hash/fnv"
+import "sync"
 
 // import "os/exec"
 
@@ -63,7 +64,7 @@ type MapReduce struct {
 	// Map of registered workers that you need to keep up to date
 	Workers map[string]*WorkerInfo
 
-	// add any additional state here
+	awaitReducers   sync.WaitGroup
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -77,7 +78,7 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.registerChannel = make(chan string)
 	mr.DoneChannel = make(chan bool)
 
-	// initialize any additional state here
+	mr.awaitReducers.Add(mr.nReduce)
 	return mr
 }
 
