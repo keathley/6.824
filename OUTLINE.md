@@ -16,6 +16,6 @@ This is the course outline that we followed for the course:
   - Suggested Readings:
     - [Effective Go: Concurrency](https://golang.org/doc/effective_go.html#concurrency)
     - [Go Concurrency Patterns: Pipelines and cancellation](https://blog.golang.org/pipelines)
-* Week 3: [MapReduce](readings/mapreduce.pdf)
-  - Homework: [Lab 1](labs/lab-1.md) | Part 3
+* Week 3: [HyperVisor](readings/bressoud-hypervisor.pdf)
+  - Homework: [Lab 1](labs/lab-1.md) | [Part 3](labs/lab-1.md#part-iii-handling-worker-failures)
 
