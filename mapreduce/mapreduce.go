@@ -11,6 +11,7 @@ import "net/rpc"
 import "net"
 import "bufio"
 import "hash/fnv"
+import "sync"
 
 // import "os/exec"
 
@@ -64,6 +65,9 @@ type MapReduce struct {
 	Workers map[string]*WorkerInfo
 
 	// add any additional state here
+	wgReduce sync.WaitGroup
+	reducers int
+	mappers  int
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -77,7 +81,9 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.registerChannel = make(chan string)
 	mr.DoneChannel = make(chan bool)
 
-	// initialize any additional state here
+	mr.reducers = 0
+	mr.mappers = 0
+
 	return mr
 }
 
