@@ -49,18 +49,14 @@ func (mr *MapReduce) RunMaster() *list.List {
 }
 
 func (mr *MapReduce) SendMapJob(jobId int) {
-	mr.SendJob(jobId, Map, mr.nReduce, func() {
-		fmt.Println("Map Callback Works")
-	})
+	mr.SendJob(jobId, Map, mr.nReduce)
 }
 
 func (mr *MapReduce) SendReduceJob(jobId int) {
-	mr.SendJob(jobId, Reduce, mr.nMap, func() {
-		fmt.Println("Callback works")
-	})
+	mr.SendJob(jobId, Reduce, mr.nMap)
 }
 
-func (mr *MapReduce) SendJob(jobId int, operation JobType, otherCount int, handleFailure func()) {
+func (mr *MapReduce) SendJob(jobId int, operation JobType, otherCount int) {
 	worker := <-mr.registerChannel
 	args := &DoJobArgs{
 		File:          mr.file,
@@ -72,26 +68,49 @@ func (mr *MapReduce) SendJob(jobId int, operation JobType, otherCount int, handl
 
 	ok := call(worker, "Worker.DoJob", args, reply)
 
-	if ok && reply.OK == true {
-		select {
-		case mr.registerChannel <- worker:
-		default:
-			// If we got to this point it means that nothing is trying to do work yet
-			// so we need to kill the current job channel so we can move on with life
+	if ok == false {
+		mr.handleWorkerFailure(operation, jobId)
+	} else {
+		go mr.putWorkerBackInQueue(worker)
+		mr.addToJobCompleteChannel(operation, jobId)
+		if mr.workingChannelIsDone(operation) {
 			mr.closeWorkingChannel(operation)
 		}
-	} else {
-		fmt.Println("FAILURE!!!!!!!!!!!!!!!!!!!!!!!")
-		panic("We had a worker failure")
-		// handleFailure()
-		// handleWorkerFailure(operation, jobId)
 	}
 }
 
-func (mr *MapReduce) handleWorkerFailure(operation JobType, jobId int) {
-	fmt.Println("Handling the worker failure")
+func (mr *MapReduce) putWorkerBackInQueue(worker string) {
+	args := &RegisterArgs{Worker: worker}
+	reply := &RegisterReply{}
+	call(mr.MasterAddress, "MapReduce.Register", args, reply)
+}
+
+func (mr *MapReduce) addToJobCompleteChannel(operation JobType, jobId int) {
 	switch operation {
 	case Map:
+		mr.mapJobCompleteChan <- jobId
+	case Reduce:
+		mr.reduceJobCompleteChan <- jobId
+	}
+}
+
+func (mr *MapReduce) workingChannelIsDone(operation JobType) bool {
+	switch operation {
+	case Map:
+		// fmt.Println("FAILURE - complete length", len(mr.mapJobCompleteChan), mr.nMap)
+		return len(mr.mapJobCompleteChan) >= mr.nMap
+	case Reduce:
+		return len(mr.reduceJobCompleteChan) >= mr.nReduce
+	}
+
+	return false
+}
+
+func (mr *MapReduce) handleWorkerFailure(operation JobType, jobId int) {
+	// fmt.Println("FAILURE", operation, jobId)
+	switch operation {
+	case Map:
+		// fmt.Println("FAILURE - Adding map back", operation, jobId)
 		mr.mapJobChan <- jobId
 	case Reduce:
 		mr.reduceJobChan <- jobId
@@ -103,8 +122,12 @@ func (mr *MapReduce) handleWorkerFailure(operation JobType, jobId int) {
 func (mr *MapReduce) closeWorkingChannel(operation JobType) {
 	switch operation {
 	case Map:
+		// fmt.Println("FAILURE - Closing map channel", len(mr.mapJobChan))
 		close(mr.mapJobChan)
 	case Reduce:
+		// fmt.Println("FAILURE - Closing reduce channel", len(mr.reduceJobChan))
 		close(mr.reduceJobChan)
+	default:
+		panic("Unable to close channel for undefined job type")
 	}
 }
