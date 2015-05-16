@@ -97,7 +97,6 @@ func (mr *MapReduce) addToJobCompleteChannel(operation JobType, jobId int) {
 func (mr *MapReduce) workingChannelIsDone(operation JobType) bool {
 	switch operation {
 	case Map:
-		// fmt.Println("FAILURE - complete length", len(mr.mapJobCompleteChan), mr.nMap)
 		return len(mr.mapJobCompleteChan) >= mr.nMap
 	case Reduce:
 		return len(mr.reduceJobCompleteChan) >= mr.nReduce
@@ -107,27 +106,19 @@ func (mr *MapReduce) workingChannelIsDone(operation JobType) bool {
 }
 
 func (mr *MapReduce) handleWorkerFailure(operation JobType, jobId int) {
-	// fmt.Println("FAILURE", operation, jobId)
 	switch operation {
 	case Map:
-		// fmt.Println("FAILURE - Adding map back", operation, jobId)
 		mr.mapJobChan <- jobId
 	case Reduce:
 		mr.reduceJobChan <- jobId
-	default:
-		panic("Unable to handle error for undefined job type")
 	}
 }
 
 func (mr *MapReduce) closeWorkingChannel(operation JobType) {
 	switch operation {
 	case Map:
-		// fmt.Println("FAILURE - Closing map channel", len(mr.mapJobChan))
 		close(mr.mapJobChan)
 	case Reduce:
-		// fmt.Println("FAILURE - Closing reduce channel", len(mr.reduceJobChan))
 		close(mr.reduceJobChan)
-	default:
-		panic("Unable to close channel for undefined job type")
 	}
 }
