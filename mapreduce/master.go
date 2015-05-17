@@ -32,8 +32,7 @@ func (mr *MapReduce) RunMaster() *list.List {
 				DPrintf(1, "Launch Worker: %s\n", worker)
 				for {
 					job := <-mr.jobChannel
-					done := call(worker, "Worker.DoJob", job, &DoJobReply{})
-					if !done {
+					if !call(worker, "Worker.DoJob", job, &DoJobReply{}) {
 						mr.jobChannel <- job
 						DPrintf(1, "Worker Failed: %s | %s #%d\n", worker, job.Operation, job.JobNumber)
 						return
@@ -56,7 +55,7 @@ func (mr *MapReduce) runJobs(phase JobType, nJobs int, nOtherJobs int) {
 			NumOtherPhase: nOtherJobs,
 			JobNumber:     job,
 		}
-		DPrintf(2, "Put Map %d onto JobChannel\n", job)
+		DPrintf(2, "Put %s Job %d onto JobChannel\n", phase, job)
 	}
 	DPrintf(1, "%s phase complete\n", phase)
 }
