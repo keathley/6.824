@@ -28,13 +28,11 @@ func (mr *MapReduce) RunMaster() *list.List {
 	go func() {
 		for worker := range mr.registerChannel {
 			go func(worker string) {
-				DPrintf(1, "Launch Worker: %s\n", worker)
-				for job := range mr.jobChannel {
-					if !call(worker, "Worker.DoJob", job, &DoJobReply{}) {
-						mr.jobChannel <- job
-						DPrintf(1, "Worker Failed: %s | %s #%d\n", worker, job.Operation, job.JobNumber)
-						return
-					}
+				if job := <-mr.jobs; call(worker, "Worker.DoJob", job, &DoJobReply{}) {
+					mr.done <- job
+					mr.registerChannel <- worker
+				} else {
+					mr.jobs <- job
 				}
 			}(worker)
 		}
@@ -45,15 +43,13 @@ func (mr *MapReduce) RunMaster() *list.List {
 }
 
 func (mr *MapReduce) jobFactory(phase JobType, nJobs int, nOtherJobs int) {
-	DPrintf(1, "Start %s phase (%d jobs)\n", phase, nJobs)
 	for job := 0; job < nJobs; job++ {
-		mr.jobChannel <- &DoJobArgs{
+		mr.jobs <- &DoJobArgs{
 			File:          mr.file,
 			Operation:     phase,
 			NumOtherPhase: nOtherJobs,
 			JobNumber:     job,
 		}
-		DPrintf(2, "Put %s Job %d onto JobChannel\n", phase, job)
+		defer func() { <-mr.done }()
 	}
-	DPrintf(1, "%s phase complete\n", phase)
 }
