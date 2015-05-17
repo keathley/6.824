@@ -1,6 +1,5 @@
 package mapreduce
 
-import "fmt"
 import "os"
 import "log"
 import "net/rpc"
@@ -20,7 +19,7 @@ type Worker struct {
 
 // The master sent us a job
 func (wk *Worker) DoJob(arg *DoJobArgs, res *DoJobReply) error {
-	fmt.Printf("Dojob %s job %d file %s operation %v N %d\n",
+	DPrintf(2, "Dojob %s job %d file %s operation %v N %d\n",
 		wk.name, arg.JobNumber, arg.File, arg.Operation,
 		arg.NumOtherPhase)
 	switch arg.Operation {
@@ -36,7 +35,7 @@ func (wk *Worker) DoJob(arg *DoJobArgs, res *DoJobReply) error {
 // The master is telling us to shutdown. Report the number of Jobs we
 // have processed.
 func (wk *Worker) Shutdown(args *ShutdownArgs, res *ShutdownReply) error {
-	DPrintf("Shutdown %s\n", wk.name)
+	DPrintf(3, "Shutdown %s\n", wk.name)
 	res.Njobs = wk.nJobs
 	res.OK = true
 	wk.nRPC = 1 // OK, because the same thread reads nRPC
@@ -51,7 +50,7 @@ func Register(master string, me string) {
 	var reply RegisterReply
 	ok := call(master, "MapReduce.Register", args, &reply)
 	if ok == false {
-		fmt.Printf("Register: RPC %s register error\n", master)
+		DPrintf(2, "Register: RPC %s register error\n", master)
 	}
 }
 
@@ -60,7 +59,7 @@ func Register(master string, me string) {
 func RunWorker(MasterAddress string, me string,
 	MapFunc func(string) *list.List,
 	ReduceFunc func(string, *list.List) string, nRPC int) {
-	DPrintf("RunWorker %s\n", me)
+	DPrintf(3, "RunWorker %s\n", me)
 	wk := new(Worker)
 	wk.name = me
 	wk.Map = MapFunc
@@ -88,5 +87,5 @@ func RunWorker(MasterAddress string, me string,
 		}
 	}
 	wk.l.Close()
-	DPrintf("RunWorker %s exit\n", me)
+	DPrintf(3, "RunWorker %s exit\n", me)
 }

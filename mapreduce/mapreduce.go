@@ -33,11 +33,12 @@ import "hash/fnv"
 // and runs Reduce on those files.  This produces <nReduce> result files,
 // which Merge() merges into a single output.
 
-// Debugging
-const Debug = 0
+const ATTEMPTS = 2  // How many times to attempt a job before giving up
+const FAILURES = 1  // How many times a slave can fail before death.
+const LOG_LEVEL = 1 // Logging level
 
-func DPrintf(format string, a ...interface{}) (n int, err error) {
-	if Debug > 0 {
+func DPrintf(level int, format string, a ...interface{}) (n int, err error) {
+	if LOG_LEVEL >= level {
 		n, err = fmt.Printf(format, a...)
 	}
 	return
@@ -64,6 +65,8 @@ type MapReduce struct {
 	Workers map[string]*WorkerInfo
 
 	// add any additional state here
+	jobChannel     chan *DoJobArgs
+	jobDoneChannel chan *DoJobArgs
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -78,6 +81,8 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.DoneChannel = make(chan bool)
 
 	// initialize any additional state here
+	mr.jobChannel = make(chan *DoJobArgs)
+	mr.jobDoneChannel = make(chan *DoJobArgs, 1)
 	return mr
 }
 
@@ -90,14 +95,14 @@ func MakeMapReduce(nmap int, nreduce int,
 }
 
 func (mr *MapReduce) Register(args *RegisterArgs, res *RegisterReply) error {
-	DPrintf("Register: worker %s\n", args.Worker)
+	DPrintf(3, "Register: worker %s\n", args.Worker)
 	mr.registerChannel <- args.Worker
 	res.OK = true
 	return nil
 }
 
 func (mr *MapReduce) Shutdown(args *ShutdownArgs, res *ShutdownReply) error {
-	DPrintf("Shutdown: registration server\n")
+	DPrintf(3, "Shutdown: registration server\n")
 	mr.alive = false
 	mr.l.Close() // causes the Accept to fail
 	return nil
@@ -124,11 +129,11 @@ func (mr *MapReduce) StartRegistrationServer() {
 					conn.Close()
 				}()
 			} else {
-				DPrintf("RegistrationServer: accept error", err)
+				DPrintf(3, "RegistrationServer: accept error", err)
 				break
 			}
 		}
-		DPrintf("RegistrationServer: done\n")
+		DPrintf(3, "RegistrationServer: done\n")
 	}()
 }
 
@@ -139,7 +144,7 @@ func MapName(fileName string, MapJob int) string {
 
 // Split bytes of input file into nMap splits, but split only on white space
 func (mr *MapReduce) Split(fileName string) {
-	fmt.Printf("Split %s\n", fileName)
+	DPrintf(2, "Split %s\n", fileName)
 	infile, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal("Split: ", err)
@@ -202,7 +207,7 @@ func DoMap(JobNumber int, fileName string,
 		log.Fatal("DoMap: ", err)
 	}
 	size := fi.Size()
-	fmt.Printf("DoMap: read split %s %d\n", name, size)
+	DPrintf(2, "DoMap: read split %s %d\n", name, size)
 	b := make([]byte, size)
 	_, err = file.Read(b)
 	if err != nil {
@@ -241,7 +246,7 @@ func DoReduce(job int, fileName string, nmap int,
 	kvs := make(map[string]*list.List)
 	for i := 0; i < nmap; i++ {
 		name := ReduceName(fileName, i, job)
-		fmt.Printf("DoReduce: read %s\n", name)
+		DPrintf(2, "DoReduce: read %s\n", name)
 		file, err := os.Open(name)
 		if err != nil {
 			log.Fatal("DoReduce: ", err)
@@ -282,11 +287,11 @@ func DoReduce(job int, fileName string, nmap int,
 // Merge the results of the reduce jobs
 // XXX use merge sort
 func (mr *MapReduce) Merge() {
-	DPrintf("Merge phase")
+	DPrintf(3, "Merge phase")
 	kvs := make(map[string]string)
 	for i := 0; i < mr.nReduce; i++ {
 		p := MergeName(mr.file, i)
-		fmt.Printf("Merge: read %s\n", p)
+		DPrintf(2, "Merge: read %s\n", p)
 		file, err := os.Open(p)
 		if err != nil {
 			log.Fatal("Merge: ", err)
@@ -360,21 +365,21 @@ func (mr *MapReduce) CleanupRegistration() {
 	var reply ShutdownReply
 	ok := call(mr.MasterAddress, "MapReduce.Shutdown", args, &reply)
 	if ok == false {
-		fmt.Printf("Cleanup: RPC %s error\n", mr.MasterAddress)
+		DPrintf(2, "Cleanup: RPC %s error\n", mr.MasterAddress)
 	}
-	DPrintf("CleanupRegistration: done\n")
+	DPrintf(3, "CleanupRegistration: done\n")
 }
 
 // Run jobs in parallel, assuming a shared file system
 func (mr *MapReduce) Run() {
-	fmt.Printf("Run mapreduce job %s %s\n", mr.MasterAddress, mr.file)
+	DPrintf(2, "Run mapreduce job %s %s\n", mr.MasterAddress, mr.file)
 
 	mr.Split(mr.file)
 	mr.stats = mr.RunMaster()
 	mr.Merge()
 	mr.CleanupRegistration()
 
-	fmt.Printf("%s: MapReduce done\n", mr.MasterAddress)
+	DPrintf(2, "%s: MapReduce done\n", mr.MasterAddress)
 
 	mr.DoneChannel <- true
 }
