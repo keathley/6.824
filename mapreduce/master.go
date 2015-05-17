@@ -26,67 +26,42 @@ func (mr *MapReduce) KillWorkers() *list.List {
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
-	go mr.flyMyPretties()
-	mr.giterdone(Map, mr.nMap)
-	mr.giterdone(Reduce, mr.nReduce)
+	go func() {
+		for worker := range mr.registerChannel {
+			go func(worker string) {
+				DPrintf(1, "Launch Worker: %s\n", worker)
+				for {
+					job := <-mr.jobChannel
+					done := call(worker, "Worker.DoJob", job, &DoJobReply{})
+					if !done {
+						mr.jobChannel <- job
+						DPrintf(1, "Fail: %s | %s #%d\n", worker, job.Operation, job.JobNumber)
+						return
+					}
+				}
+			}(worker)
+		}
+	}()
+	mr.giterdone(Map, mr.nMap, mr.nReduce)
+	mr.giterdone(Reduce, mr.nReduce, mr.nMap)
 	return mr.KillWorkers()
 }
 
-func (mr *MapReduce) flyMyPretties() {
-	for worker := range mr.registerChannel {
-		DPrintf(1, "Launch Worker: %s\n", worker)
-		go mr.werkit(worker)
-	}
-}
-
-func (mr *MapReduce) werkit(worker string) {
-	for fails := 0; fails < FAILURES; {
-		job := <-mr.jobChannel
-		done := call(worker, "Worker.DoJob", job, &DoJobReply{})
-		if done {
-			mr.jobDoneChannel <- job
-		} else {
-			DPrintf(1, "Fail: %s | %s #%d\n", worker, job.Operation, job.JobNumber)
-			fails++
-		}
-	}
-}
-
-func (mr *MapReduce) giterdone(phase JobType, nJobs int) {
+func (mr *MapReduce) giterdone(phase JobType, nJobs int, nOtherJobs int) {
 	DPrintf(1, "Start %s phase (%d jobs)\n", phase, nJobs)
-	jobsDone := make([]bool, nJobs)
-	for i := 0; i < nJobs*ATTEMPTS; {
+	for i := 0; i < nJobs; i++ {
 		job := i % nJobs
-		if jobsDone[job] {
-			i++
-			continue
-		}
-		select {
-		case mr.jobChannel <- mr.jobArgs(phase, job):
-			DPrintf(2, "%d:Put Map %d onto JobChannel\n", i, job)
-			i++
-		case donejob := <-mr.jobDoneChannel:
-			if donejob.Operation == phase {
-				DPrintf(2, "Job Done: %s #%d\n", phase, donejob.JobNumber)
-				jobsDone[donejob.JobNumber] = true
-			}
-		}
+		mr.jobChannel <- mr.jobArgs(phase, job, nOtherJobs)
+		DPrintf(2, "%d:Put Map %d onto JobChannel\n", i, job)
 	}
 	DPrintf(1, "%s phase complete\n", phase)
 }
 
-func (mr *MapReduce) jobArgs(phase JobType, job int) *DoJobArgs {
+func (mr *MapReduce) jobArgs(phase JobType, job int, nOtherJobs int) *DoJobArgs {
 	return &DoJobArgs{
 		File:          mr.file,
 		Operation:     phase,
-		NumOtherPhase: mr.otherPhaseJobs(phase),
+		NumOtherPhase: nOtherJobs,
 		JobNumber:     job,
 	}
-}
-
-func (mr *MapReduce) otherPhaseJobs(phase JobType) int {
-	if phase == Map {
-		return mr.nReduce
-	}
-	return mr.nMap
 }

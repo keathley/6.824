@@ -33,8 +33,6 @@ import "hash/fnv"
 // and runs Reduce on those files.  This produces <nReduce> result files,
 // which Merge() merges into a single output.
 
-const ATTEMPTS = 2  // How many times to attempt a job before giving up
-const FAILURES = 1  // How many times a slave can fail before death.
 const LOG_LEVEL = 1 // Logging level
 
 func DPrintf(level int, format string, a ...interface{}) (n int, err error) {
@@ -65,8 +63,7 @@ type MapReduce struct {
 	Workers map[string]*WorkerInfo
 
 	// add any additional state here
-	jobChannel     chan *DoJobArgs
-	jobDoneChannel chan *DoJobArgs
+	jobChannel chan *DoJobArgs
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -82,7 +79,6 @@ func InitMapReduce(nmap int, nreduce int,
 
 	// initialize any additional state here
 	mr.jobChannel = make(chan *DoJobArgs)
-	mr.jobDoneChannel = make(chan *DoJobArgs, 1)
 	return mr
 }
 
