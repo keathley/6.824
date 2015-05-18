@@ -64,7 +64,7 @@ type MapReduce struct {
 	// Map of registered workers that you need to keep up to date
 	Workers map[string]*WorkerInfo
 
-	awaitReducers   sync.WaitGroup
+	awaitJobs   sync.WaitGroup
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -78,7 +78,7 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.registerChannel = make(chan string)
 	mr.DoneChannel = make(chan bool)
 
-	mr.awaitReducers.Add(mr.nReduce)
+	mr.awaitJobs.Add(mr.nMap)
 	return mr
 }
 

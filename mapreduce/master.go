@@ -37,8 +37,10 @@ func (mr *MapReduce) RunMaster() *list.List {
 		go mr.QueueJob(&jobArgs)
 	}
 
-	fmt.Println("All mapping jobs queued")
+	// wait for all map jobs to be done before moving on
+	mr.awaitJobs.Wait()
 
+	mr.awaitJobs.Add(mr.nReduce)
 	for reduceJobNum := 0; reduceJobNum < mr.nReduce; reduceJobNum++ {
 		var reduceJobArgs = DoJobArgs{
 			File: mr.file,
@@ -52,7 +54,7 @@ func (mr *MapReduce) RunMaster() *list.List {
 	fmt.Println("All reducer jobs queued")
 
 	// wait for all reducers to complete before killing workers
-	mr.awaitReducers.Wait()
+	mr.awaitJobs.Wait()
 	fmt.Println("All reducer jobs done")
 
 	return mr.KillWorkers()
@@ -69,20 +71,13 @@ func (mr *MapReduce) QueueJob(args *DoJobArgs) {
 	// the RPC call could have failed (see done's state) or the
 	// worker itself could have failed (see reply.OK)
 	if done && reply.OK {
-		if args.Operation == Reduce {
-			// this reducer has completed, so we can mark
-			// it as done
-			mr.awaitReducers.Done()
-		}
+		mr.awaitJobs.Done()
 
 		// requeue worker as available
 		mr.registerChannel <- worker
 	} else {
 		// log failure types separately for debugging
-		fmt.Printf("RPC failure: %t. Worker failure: %t\n", done, reply.OK)
-		// potential problem: since we're not restarting a job
-		// when a worker fails, we have a potential to wait
-		// forever (because the reducers might not all check
-		// in). hopefully, part 3 addresses this concern
+		fmt.Printf("MINE:RPC failure: %t. Worker failure: %t\n", done, reply.OK)
+		go mr.QueueJob(args)
 	}
 }
