@@ -8,8 +8,6 @@ import "sync"
 import "fmt"
 import "os"
 
-//import "errors"
-
 type ViewServer struct {
 	mu   sync.Mutex
 	l    net.Listener
@@ -22,6 +20,7 @@ type ViewServer struct {
 	idle        string
 	liveServers map[string]time.Time
 	lastAcks    map[string]uint
+	rebooted    map[string]bool
 }
 
 //
@@ -29,29 +28,56 @@ type ViewServer struct {
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 
-	// Your code here.
+	DPrintf("Ping from %v with view %d when server's view is %d\n",
+		args.Me, args.Viewnum, vs.view.Viewnum)
+	vs.mu.Lock()
 	var err error
 	err = nil
-	fmt.Printf("Ping from %v with view %d when server's view is %d\n", args.Me, args.Viewnum, vs.view.Viewnum)
+	vs.updateStats(args)
+	vs.ackView(args)
+	if args.Me == vs.view.Primary {
+		reply.View = vs.view
+	} else {
+		reply.View = vs.ackedView
+	}
+	DPrintf("Responded to ping with view %d\n", reply.View.Viewnum)
+	vs.mu.Unlock()
+	return err
+}
+
+// Handles updates related specifically to a received ping:
+// - Is this the very first ping that's been received?
+// - Has a server rebooted?
+func (vs *ViewServer) updateStats(args *PingArgs) {
 	if vs.ackedView.Viewnum == 0 {
-		fmt.Printf("Got first ping: primary is %v\n", args.Me)
+		DPrintf("Got first ping: primary is %v\n", args.Me)
 		vs.view = View{Viewnum: 1, Primary: args.Me}
 		vs.ackedView = vs.view
 	}
-
-	reply.View = vs.ackedView
-	vs.updateStats(args)
 	client := args.Me
 	if vs.view.Primary != client && vs.view.Backup != client {
 		vs.idle = client
 	}
-	// err := errors.New("blah")
-	return err
+	vs.liveServers[args.Me] = time.Now()
+	if args.Viewnum == 0 && vs.lastAcks[args.Me] > 0 {
+		DPrintf("Marking %s as rebooted (pinged with %d)...\n", args.Me, args.Viewnum)
+		vs.rebooted[args.Me] = true
+	} else {
+		delete(vs.rebooted, args.Me)
+	}
+	vs.validateView(vs.isRebooted)
 }
 
-func (vs *ViewServer) updateStats(args *PingArgs) {
-	vs.liveServers[args.Me] = time.Now()
+// Promote the VS's current view of the world to the blessed (acked) view if the primary has acknowledged
+// receipt of it.
+func (vs *ViewServer) ackView(args *PingArgs) {
 	vs.lastAcks[args.Me] = args.Viewnum
+
+	if vs.lastAcks[vs.view.Primary] == vs.view.Viewnum {
+		vs.ackedView = vs.view
+		delete(vs.rebooted, vs.view.Primary)
+		delete(vs.rebooted, vs.view.Backup)
+	}
 }
 
 //
@@ -60,7 +86,7 @@ func (vs *ViewServer) updateStats(args *PingArgs) {
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 
 	// Your code here.
-	reply.View = vs.ackedView
+	reply.View = vs.view
 	return nil
 }
 
@@ -70,72 +96,95 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 // accordingly.
 //
 func (vs *ViewServer) tick() {
-	// The view service proceeds to a new view when either it hasn't received a Ping from the primary or backup for DeadPingsPingIntervals,
-	//or if the primary or backup crashed and restarted,
-	// or if there is no backup and there's an idle server (a server that's been Pinging but is neither the primary nor the backup).
-	//But the view service must not change views (i.e., return a different view to callers) until the primary from the current view acknowledges that it is operating in the current view (by sending a Ping with the current view number). If the view service has not yet received an acknowledgment for the current view from the primary of the current view, the view service should not change views even if it thinks that the primary or backup has died.
 
 	// Your code here.
+	DPrintln("Tick...")
 	vs.mu.Lock()
-	vs.removeStaleClients()
-	vs.validateView()
+	vs.validateView(vs.isDead)
 	vs.mu.Unlock()
+
 }
 
-func (vs *ViewServer) removeStaleClients() {
+// If a server hasn't pinged in the pre-set amount of time,
+// remove it from the list of 'live' servers.
+func (vs *ViewServer) markStaleClients() {
 	deathCutoff := (DeadPings * PingInterval)
 	for client, lastPing := range vs.liveServers {
 		if time.Since(lastPing) >= deathCutoff {
-			fmt.Printf("Removing stale server %v\n", client)
+			DPrintf("Removing stale server %v\n", client)
 			delete(vs.liveServers, client)
 		}
 	}
 }
 
-func (vs *ViewServer) validateView() {
-	if vs.view.Viewnum == 0 {
+// convenience type for passing a function to a call to validateView()
+type validator func(client string) bool
+
+// Make sure the VS's view accurately represents the state of the world:
+// - Sweep out dead clients
+// - Promote any idle server to backup if the backup fails its validation check or is absent
+// - Promote an initialized backup to primary of the primary fails its validation check
+func (vs *ViewServer) validateView(check validator) {
+	if vs.view.Viewnum == 0 || vs.ackedView.Viewnum < vs.view.Viewnum {
 		return
 	}
+	vs.markStaleClients()
+	DPrintf("Before view validation: \n\tCurrent: %s\n\tAcked: %s\n",
+		viewAsString(vs.view), viewAsString(vs.ackedView))
 
-	var advanced = false
-	// backup rebooted
-	if vs.view.Backup != "" && vs.rebooted(vs.view.Backup) {
-		vs.view.Backup = vs.idle
-		vs.idle = ""
-		advanced = true
-	}
-	// primary rebooted
-	if vs.view.Primary != "" && vs.rebooted(vs.view.Primary) {
+	backup := vs.view.Backup
+	primary := vs.view.Primary
+	// backup died, or backup has already been removed but not yet replaced
+	if check(backup) || (primary != "" && backup == "" && vs.idle != "") {
+		DPrintln("Promoting idle to backup...")
+		vs.view = promoteIdle(vs)
+	} else {
+		// primary died...but we can't promote a newly promoted backup all the way to
+		// primary because (insufficiently explained) reasons, so we're only doing this if
+		// we haven't just promoted a backup
+		if check(primary) {
+			DPrintln("Promoting backup to primary...")
+			vs.view = promoteBackup(vs)
 
-		vs.view.Primary = vs.view.Backup
-		if vs.idle != "" {
-			vs.view.Backup = vs.idle
-			vs.idle = ""
-		} else {
-			vs.view.Backup = ""
 		}
-		advanced = true
-
 	}
-	// filling an empty backup slot
-	if vs.view.Primary != "" && vs.view.Backup == "" && vs.idle != "" {
-		vs.view.Backup = vs.idle
-		vs.idle = ""
-		advanced = true
-	}
-	var acked = vs.lastAcks[vs.view.Primary] == vs.view.Viewnum
-	if advanced {
-		vs.view.Viewnum += 1
-	}
-	if acked {
-		vs.ackedView = vs.view
-	}
-	fmt.Printf("After view validation: \tCurrent: %d\tAcked: %d\n", vs.view.Viewnum, vs.ackedView.Viewnum)
+	DPrintf("After view validation: \n\tCurrent: %s\n\tAcked: %s\n",
+		viewAsString(vs.view), viewAsString(vs.ackedView))
 }
 
-func (vs *ViewServer) rebooted(client string) bool {
-	//	fmt.Printf("Liveness check for %s: lastPing at %v; last acked view: %d\n", client[len(client)-6:len(client)], vs.liveServers[client], vs.lastAcks[client])
-	return vs.liveServers[client].IsZero() || (vs.lastAcks[client] == 0 && vs.lastAcks[client] < vs.view.Viewnum)
+// Validation check to see if the client's last ping singalled a crash and reboot
+func (vs *ViewServer) isRebooted(client string) bool {
+	if client != "" && vs.rebooted[client] {
+		delete(vs.rebooted, client)
+		return true
+	} else {
+		return false
+	}
+}
+
+// Validation check to see if the client failed to sent a timely heartbeat
+func (vs *ViewServer) isDead(client string) bool {
+	return client != "" && vs.liveServers[client].IsZero()
+}
+
+// Promote the backup client to the primary position
+func promoteBackup(vs *ViewServer) View {
+	idle := vs.idle
+	vs.idle = ""
+	return View{vs.view.Viewnum + 1, vs.view.Backup, idle}
+}
+
+// Promote any idle client to the backup position, leaving the current primary in place
+func promoteIdle(vs *ViewServer) View {
+	idle := vs.idle
+	vs.idle = ""
+	return View{vs.view.Viewnum + 1, vs.view.Primary, idle}
+}
+
+// Pretty-print a view
+func viewAsString(view View) string {
+	return fmt.Sprintf("\tNum: %d \tPrimary: %s \tBackup: %s",
+		view.Viewnum, view.Primary, view.Backup)
 }
 
 //
@@ -157,6 +206,7 @@ func StartServer(me string) *ViewServer {
 	vs.ackedView = View{Viewnum: 0}
 	vs.liveServers = make(map[string]time.Time)
 	vs.lastAcks = make(map[string]uint)
+	vs.rebooted = make(map[string]bool)
 
 	// tell net/rpc about our RPC server and handlers.
 	rpcs := rpc.NewServer()
