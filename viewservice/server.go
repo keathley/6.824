@@ -8,21 +8,70 @@ import "sync"
 import "fmt"
 import "os"
 
-type ViewServer struct {
-	mu   sync.Mutex
-	l    net.Listener
-	dead bool
-	me   string
+type Server struct {
+	Me       string
+	PingTime time.Time
+}
 
-	// Your declarations here.
+type AvailableServers struct {
+	servers []Server
+}
+
+func (as *AvailableServers) UpdateServer(name string) bool {
+	fmt.Println("Updating Server:", name)
+
+	server, isFound := as.FindServer(name)
+	server.PingTime = time.Now()
+
+	if !isFound {
+		fmt.Println("Server was found")
+		server.Me = name
+		as.servers = append(as.servers, server)
+	}
+
+	return false
+}
+
+func (as *AvailableServers) FindServer(name string) (Server, bool) {
+
+	for _, server := range as.servers {
+		if server.Me == name {
+			return server, true
+		}
+	}
+
+	return Server{}, false
+}
+
+func (as *AvailableServers) Len() int {
+	return len(as.servers)
+}
+
+func (as *AvailableServers) GetIdle() Server {
+	fmt.Println("Getting idle server")
+	return as.servers[0]
+}
+
+type ViewServer struct {
+	mu               sync.Mutex
+	l                net.Listener
+	dead             bool
+	me               string
+	availableServers AvailableServers
+	currentView      View
 }
 
 //
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
+	// Add server to list of available servers
+	if len(args.Me) > 0 {
+		vs.availableServers.UpdateServer(args.Me)
+	}
 
-	// Your code here.
+	// Reply with current view
+	reply.View = vs.currentView
 
 	return nil
 }
@@ -31,6 +80,11 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 // server Get() RPC handler.
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
+
+	fmt.Println("GET")
+	fmt.Println("GET View:", vs.currentView)
+
+	reply.View = vs.currentView
 
 	// Your code here.
 
@@ -43,8 +97,21 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 // accordingly.
 //
 func (vs *ViewServer) tick() {
+	// Break out early if we have no servers
+	fmt.Println("SERVER COUNT:", vs.availableServers.Len())
+	if vs.availableServers.Len() < 1 {
 
-	// Your code here.
+		return
+	}
+
+	// If we don't have a primary promote one from the available servers
+	// vs.current
+	if len(vs.currentView.Primary) < 1 {
+		primary := vs.availableServers.GetIdle()
+		vs.currentView = vs.buildNewView(primary.Me, "")
+	}
+
+	fmt.Println("currentView", vs.currentView)
 }
 
 //
@@ -57,10 +124,22 @@ func (vs *ViewServer) Kill() {
 	vs.l.Close()
 }
 
+func (vs *ViewServer) buildNewView(primary string, backup string) View {
+	newView := View{
+		Viewnum: vs.currentView.Viewnum + 1,
+		Primary: primary,
+		Backup:  backup,
+	}
+
+	fmt.Println("new View", newView)
+	return newView
+}
+
 func StartServer(me string) *ViewServer {
 	vs := new(ViewServer)
 	vs.me = me
-	// Your vs.* initializations here.
+	vs.availableServers = AvailableServers{}
+	vs.currentView = View{Viewnum: 0}
 
 	// tell net/rpc about our RPC server and handlers.
 	rpcs := rpc.NewServer()
