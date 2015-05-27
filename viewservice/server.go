@@ -15,14 +15,33 @@ type ViewServer struct {
 	me   string
 
 	// Your declarations here.
+	View View;
+	viewAcked bool;
+	Backup string;
 }
 
 //
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
+	fmt.Printf("Ping from %s.\n", args.Me)
 
 	// Your code here.
+
+	if (vs.View.Viewnum == 0) { 					// first server is primary
+		vs.View = View{Viewnum:1, Primary:args.Me, Backup:""}
+
+	} else if (args.Me == vs.View.Primary && args.Viewnum == vs.View.Viewnum) {
+		vs.viewAcked = true
+		if (vs.View.Backup == "" && vs.Backup != "") {
+			vs.View = View{Viewnum:vs.View.Viewnum+1, Primary:args.Me, Backup:vs.Backup}
+		}
+
+	} else if (vs.Backup == "" && args.Me != vs.Backup) {
+		vs.Backup = args.Me
+	}
+
+	reply.View = vs.View
 
 	return nil
 }
@@ -32,7 +51,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 
-	// Your code here.
+	reply.View = vs.View
 
 	return nil
 }

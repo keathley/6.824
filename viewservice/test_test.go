@@ -59,6 +59,7 @@ func Test1(t *testing.T) {
 		}
 		time.Sleep(PingInterval)
 	}
+
 	check(t, ck1, ck1.me, "", 1)
 	fmt.Printf("  ... Passed\n")
 
