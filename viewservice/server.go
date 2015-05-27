@@ -16,29 +16,52 @@ type ViewServer struct {
 
 	// Your declarations here.
 	View View;
-	viewAcked bool;
-	Backup string;
+	NextView View;
+	primaryMisses uint;
+	backupMisses uint;
+	acked bool;
 }
 
 //
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
-	fmt.Printf("Ping from %s.\n", args.Me)
-
-	// Your code here.
-
-	if (vs.View.Viewnum == 0) { 					// first server is primary
+	// first server to check in becomes primary
+	if (vs.View.Viewnum == 0) {
 		vs.View = View{Viewnum:1, Primary:args.Me, Backup:""}
+		vs.NextView = vs.View
 
-	} else if (args.Me == vs.View.Primary && args.Viewnum == vs.View.Viewnum) {
-		vs.viewAcked = true
-		if (vs.View.Backup == "" && vs.Backup != "") {
-			vs.View = View{Viewnum:vs.View.Viewnum+1, Primary:args.Me, Backup:vs.Backup}
+	// ping from primary resets timeout and acks view
+	} else if (args.Me == vs.View.Primary) {
+
+		// if primary is up-to-date, reset clock and ack view
+		if (args.Viewnum == vs.View.Viewnum) {
+			vs.primaryMisses = 0
+			if (vs.View.Viewnum < vs.NextView.Viewnum) {
+				vs.View = vs.NextView
+				vs.acked = false
+			} else {
+				vs.acked = true
+			}
+
+		} else if (args.Viewnum == 0) {
+			primaryFailure(vs)
 		}
 
-	} else if (vs.Backup == "" && args.Me != vs.Backup) {
-		vs.Backup = args.Me
+	// ping from backup resets backup timeout
+	} else if (args.Me == vs.View.Backup && args.Viewnum == vs.View.Viewnum) {
+		vs.backupMisses = 0
+
+		if (args.Me == vs.NextView.Primary && vs.acked) {
+			vs.View = vs.NextView
+			vs.primaryMisses = 0
+			vs.acked = false
+		}
+
+	// if we don't have a backup and a new server comes in, store it as backup
+	} else if (args.Me != vs.NextView.Primary && vs.NextView.Backup == "") {
+		vs.NextView = View{Viewnum:vs.View.Viewnum+1, Primary:vs.NextView.Primary, Backup:args.Me}
+		vs.backupMisses = 0
 	}
 
 	reply.View = vs.View
@@ -56,14 +79,23 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 	return nil
 }
 
+func primaryFailure(vs *ViewServer) {
+	vs.NextView = View{Viewnum:vs.View.Viewnum+1, Primary:vs.View.Backup, Backup:""}
+	vs.primaryMisses = 0
+}
+
 //
 // tick() is called once per PingInterval; it should notice
 // if servers have died or recovered, and change the view
 // accordingly.
 //
 func (vs *ViewServer) tick() {
+	vs.primaryMisses += 1
+	vs.backupMisses += 1
 
-	// Your code here.
+	if (vs.primaryMisses > DeadPings) {
+		primaryFailure(vs)
+	}
 }
 
 //
