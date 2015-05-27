@@ -152,21 +152,21 @@ The tests kills a server by setting its <tt>dead</tt> flag. You must make sure t
 
 Your key/value service should continue operating correctly as long as there has never been a time at which no server was alive. It should also operate correctly with partitions: a server that suffers temporary network failure without crashing, or can talk to some computers but not others. If your service is operating with just one server, it should be able to incorporate a recovered or idle server (as backup), so that it can then tolerate another server failure.
 
-Correct operation means that calls to Clerk.Get(k) return the latest value set by a successful call to Clerk.Put(k,v) or Clerk.PutHash(k,v), or an empty string if the key has never been Put()'s. All operations should provide at-most-once semantics (see lecture 3).
+Correct operation means that calls to <tt>Clerk.Get(k)</tt> return the latest value set by a successful call to <tt>Clerk.Put(k,v)</tt> or <tt>Clerk.PutHash(k,v)</tt>, or an empty string if the key has never been <tt>Put()</tt>. All operations should provide at-most-once semantics (see lecture 3).
 
 You should assume that the viewservice never halts or crashes.
 
 Your clients and servers may only communicate using RPC, and both clients and servers must send RPCs with the <tt>call()</tt> function in <tt>client.go</tt>.
 
-It's crucial that only one primary be active at any given time. You should have a clear story worked out for why that's the case for your design. A danger: suppose in some view S1 is the primary; the viewservice changes views so that S2 is the primary; but S1 hasn't yet heard about the new view and thinks it is still primary. Then some clients might talk to S1, and others talk to S2, and not see each others' Put()s.
+It's crucial that only one primary be active at any given time. You should have a clear story worked out for why that's the case for your design. A danger: suppose in some view S1 is the primary; the viewservice changes views so that S2 is the primary; but S1 hasn't yet heard about the new view and thinks it is still primary. Then some clients might talk to S1, and others talk to S2, and not see each others' <tt>Put()</tt>s.
 
-A server that isn't the active primary should either not respond to clients, or respond with an error: it should set GetReply.Err or PutReply.Err to something other than OK.
+A server that isn't the active primary should either not respond to clients, or respond with an error: it should set <tt>GetReply.Err</tt> or <tt>PutReply.Err</tt> to something other than <tt>OK</tt>.
 
-Clerk.Get(), Clerk.Put(), and Clerk.PutHash() should only return when they have completed the operation. That is, Put's should keep trying until it has updated the key/value database, and Clerk.Get() should keep trying until it has retrieved the current value for the key (if any). Your server must filter out the duplicate RPCs that these client re-tries will generate to ensure at-most-once semantics for operations. You can assume that each clerk has only one outstanding Put or Get. Think carefully about what the commit point is for a Put.
+<tt>Clerk.Get()</tt>, <tt>Clerk.Put()</tt>, and <tt>Clerk.PutHash()</tt> should only return when they have completed the operation. That is, <tt>Put()</tt>s should keep trying until it has updated the key/value database, and <tt>Clerk.Get()</tt> should keep trying until it has retrieved the current value for the key (if any). Your server must filter out the duplicate RPCs that these client re-tries will generate to ensure at-most-once semantics for operations. You can assume that each clerk has only one outstanding Put or Get. Think carefully about what the commit point is for a <tt>Put()</tt>.
 
 A server should not talk to the viewservice for every Put/Get it receives, since that would put the viewservice on the critical path for performance and fault-tolerance. Instead servers should Ping the viewservice periodically (in <tt>pbservice/server.go</tt>'s <tt>tick()</tt>) to learn about new views.
 
-Part of your one-primary-at-a-time strategy should rely on the viewservice only promoting the backup from view _i_to be primary in view _i+1_. If the old primary from view _i_ tries to handle a client request, it will forward it to its backup. If that backup hasn't heard about view _i+1_, then it's not acting as primary yet, so no harm done. If the backup has heard about view _i+1_and is acting as primary, it knows enough to reject the old primary's forwarded client requests.
+Part of your one-primary-at-a-time strategy should rely on the viewservice only promoting the backup from view _i_ to be primary in view _i+1_. If the old primary from view _i_ tries to handle a client request, it will forward it to its backup. If that backup hasn't heard about view _i+1_, then it's not acting as primary yet, so no harm done. If the backup has heard about view _i+1_ and is acting as primary, it knows enough to reject the old primary's forwarded client requests.
 
 You'll need to ensure that the backup sees every update to the key/value database, by a combination of the primary initializing it with the complete key/value database and forwarding subsequent client Puts.
 
@@ -249,53 +249,48 @@ You may find you want to generate numbers that have a high probability of being 
     func nrand() int64 {
       max := big.NewInt(int64(1) 
     
-    The tests kills a server by setting its dead flag. You must
-    make sure that your server terminates correctly when that flag is set, otherwise
-    you may fail to complete the test cases.
+The tests kills a server by setting its dead flag. You must
+make sure that your server terminates correctly when that flag is set, otherwise
+you may fail to complete the test cases.
     
     
-    Hint: even if your viewserver passed all the tests in Part A, it
-    may still have bugs that cause failures in Part B.
+Hint: even if your viewserver passed all the tests in Part A, it
+may still have bugs that cause failures in Part B.
     
     
-    Hint: study the test cases before you start programming
+Hint: study the test cases before you start programming
     
-    Handin procedure
+Handin procedure
     
-    Submit your code via the class's submission website, located here:
+Submit your code via the class's submission website, located here:
     
-    https://ydmao.scripts.mit.edu:444/6.824/handin.py
+https://ydmao.scripts.mit.edu:444/6.824/handin.py
     
-    You may use your MIT Certificate or request an API key via email to
-    log in for the first time.
-    Your API key (XXX) is displayed once you logged in, which can
-    be used to upload lab2 from the console as follows.
+You may use your MIT Certificate or request an API key via email to
+log in for the first time.
+Your API key (XXX) is displayed once you logged in, which can
+be used to upload lab2 from the console as follows.
     
-    For part A:
-    
+For part A:
     
     $ cd ~/6.824
     $ echo XXX > api.key
     $ make lab2a
     
     
-    And for part B:
-    
+And for part B:
     
     $ cd ~/6.824
     $ echo XXX > api.key
     $ make lab2b
     
     
-    You can check the submission website to check if your submission is successful.
+You can check the submission website to check if your submission is successful.
     
-    You will receive full credit if your software passes
-    the test_test.go tests when we run your software on our
-    machines. We will use the timestamp of your last
-    submission for the purpose of calculating late days.
+You will receive full credit if your software passes
+the test_test.go tests when we run your software on our
+machines. We will use the timestamp of your last
+submission for the purpose of calculating late days.
     
-    
-    
-    
-    Please post questions on Piazza.
+Please post questions on Piazza.
 
