@@ -9,12 +9,10 @@ import "fmt"
 import "os"
 
 type ViewServer struct {
-	mu   sync.Mutex
-	l    net.Listener
-	dead bool
-	me   string
-
-	// Your declarations here.
+	mu       sync.Mutex
+	l        net.Listener
+	dead     bool
+	me       string
 	view     View
 	lastPing map[string]time.Time
 	ack      uint
@@ -24,56 +22,36 @@ type ViewServer struct {
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
-
-	// Your code here.
-	server, viewnum := args.Me, args.Viewnum
-	vs.lastPing[server] = time.Now()
-	fmt.Printf(" Ping: %s | %d\n", server, viewnum)
-	if server == vs.view.Primary && viewnum == 0 {
-		vs.death(server)
-	} else if server == vs.view.Primary {
-		vs.ack = viewnum
+	vs.lastPing[args.Me] = time.Now()
+	if args.Me == vs.view.Primary && args.Viewnum == 0 {
+		vs.death(args.Me)
+	} else if args.Me == vs.view.Primary {
+		vs.ack = args.Viewnum
 	} else if vs.view.Primary == "" {
-		vs.view.Primary = server
+		vs.view.Primary = args.Me
 		vs.view.Viewnum += 1
-	} else if vs.view.Backup == "" && server != vs.view.Primary {
-		vs.view.Backup = server
+	} else if vs.view.Backup == "" {
+		vs.view.Backup = args.Me
 		vs.view.Viewnum += 1
 	}
-
-	if server == vs.view.Primary {
-		reply.View = vs.view
-	} else {
-		reply.View = vs.view
-	}
-	fmt.Println(" PingReply:", reply)
+	reply.View = vs.view
 	return nil
 }
 
 func (vs *ViewServer) death(server string) {
-	fmt.Println(" Death:", server)
-	fmt.Printf(" Ack: %d Viewnum: %d\n", vs.ack, vs.view.Viewnum)
-	if vs.ack < vs.view.Viewnum {
-		return
-	}
-	delete(vs.lastPing, server)
-	if server == vs.view.Primary {
-		vs.view.Primary = vs.view.Backup
-		vs.newBackup()
-		vs.view.Viewnum += 1
-	} else if server == vs.view.Backup {
-		vs.view.Backup = ""
-		vs.newBackup()
-		vs.view.Viewnum += 1
-	}
-	fmt.Println(" NewView:", vs.view)
-}
-
-func (vs *ViewServer) newBackup() {
-	vs.view.Backup = ""
-	for s := range vs.lastPing {
-		if s != vs.view.Primary {
-			vs.view.Backup = s
+	if vs.ack == vs.view.Viewnum {
+		delete(vs.lastPing, server)
+		if server == vs.view.Primary || server == vs.view.Backup {
+			if server == vs.view.Primary {
+				vs.view.Primary = vs.view.Backup
+			}
+			vs.view.Backup = ""
+			for s := range vs.lastPing {
+				if s != vs.view.Primary {
+					vs.view.Backup = s
+				}
+			}
+			vs.view.Viewnum += 1
 		}
 	}
 }
@@ -82,10 +60,7 @@ func (vs *ViewServer) newBackup() {
 // server Get() RPC handler.
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
-
-	// Your code here.
 	reply.View = vs.view
-	fmt.Println("Get:", reply)
 	return nil
 }
 
@@ -95,13 +70,9 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 // accordingly.
 //
 func (vs *ViewServer) tick() {
-
-	// Your code here.
-	now := time.Now()
 	for server, pingTime := range vs.lastPing {
-		// fmt.Println(" Tick:", vs.lastPing)
-		if now.Sub(pingTime) > DeadPings*PingInterval {
-			go vs.death(server)
+		if time.Now().Sub(pingTime) > DeadPings*PingInterval {
+			vs.death(server)
 		}
 	}
 }
