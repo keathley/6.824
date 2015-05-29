@@ -31,22 +31,64 @@ type PBServer struct {
 	vs         *viewservice.Clerk
 	done       sync.WaitGroup
 	finish     chan interface{}
-	// Your declarations here.
+	view       viewservice.View // first custom field
+	data       map[string]string
+	requestLog map[string]ClientState
+	lock       sync.RWMutex
 }
 
 func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 	// Your code here.
+	var err error
+	if view.Primary != pb.me {
+		reply.Err = ErrWrongServer
+		return err
+	}
+	lock.Lock()
+	if args.PutHash {
+
+	} else {
+		data[args.Key] = args.Value
+	}
+	lock.Unlock()
 	return nil
 }
 
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
+	var err error
+	if view.Primary != pb.me {
+		reply.Err = ErrWrongServer
+		return err
+	}
+	lock.RLock()
+	reply.Value = data[args.Key]
+	return nil
+}
+
+func (pb *PBServer) RecvBackup(args *BackupArgs, reply *BackupReply) error {
+	pb.data = args.Data
+	pb.requestLog = args.RequestLog
 	return nil
 }
 
 // ping the viewserver periodically.
 func (pb *PBServer) tick() {
 	// Your code here.
+	args := &PingArgs{pb.me, pb.viewnum}
+	var reply PingReply
+	ok := call(vs.me, "Clerk.Ping", args, &reply)
+	if ok {
+		newView := reply.View
+		pb.handleBackup(pb.view, newView)
+		pb.view = newView
+	}
+}
+
+func (pb *PBServer) handleBackup(old viewservice.View, newView viewservice.View) {
+	if old.Viewnum < newView.Viewnum && old.Primary == pb.me && old.Backup != newView.Backup {
+
+	}
 }
 
 // tell the server to shut itself down.
