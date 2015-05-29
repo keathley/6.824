@@ -12,13 +12,15 @@ import "fmt"
 type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
+	me    string
+	opnum uint
 }
 
 func MakeClerk(vshost string, me string) *Clerk {
 	ck := new(Clerk)
 	ck.vs = viewservice.MakeClerk(me, vshost)
 	// Your ck.* initializations here
-
+	ck.me = me
 	return ck
 }
 

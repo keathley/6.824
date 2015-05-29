@@ -11,11 +11,11 @@ const (
 type Err string
 
 type PutArgs struct {
-	Key    string
-	Value  string
-	DoHash bool // For PutHash
-	// You'll have to add definitions here.
-
+	Key     string
+	Value   string
+	DoHash  bool // For PutHash
+	Version uint // first custom field
+	Client  string
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
 }
@@ -26,13 +26,28 @@ type PutReply struct {
 }
 
 type GetArgs struct {
-	Key string
-	// You'll have to add definitions here.
+	Key     string
+	Version uint // first custom field
+	Client  string
 }
 
 type GetReply struct {
 	Err   Err
 	Value string
+}
+
+type BackupArgs struct {
+	Data       map[string]string
+	RequestLog map[string]ClientState
+}
+
+type BackupReply struct {
+	Err Err
+}
+
+type ClientState struct {
+	lastGet uint
+	lastPut uint
 }
 
 // Your RPC definitions here.
