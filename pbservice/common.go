@@ -41,6 +41,10 @@ type BackupArgs struct {
 	RequestLog map[string]ClientState
 }
 
+type BackupReply struct {
+	Err Err
+}
+
 type ClientState struct {
 	lastGet uint
 	lastPut uint
