@@ -26,9 +26,9 @@ This is the course outline that we followed for the course:
 * Week 4 (5/27): [HyperVisor](readings/bressoud-hypervisor.pdf)
   - Lecture Notes: [Fault Tolerance: primary/backup replication](http://css.csail.mit.edu/6.824/2014/notes/l03.txt)
   - Homework: [Lab 2](labs/lab-2.md) | [Part A](labs/lab-2.md#part-a-the-viewservice)
-* Week 5 (6/1): [Flat Datacenter Storage](readings/fsd.pdf)
+* Week 5 (6/1): [Flat Datacenter Storage](readings/fds.pdf)
   - Lecture Notes: [Flat Datacenter Storage case study](http://css.csail.mit.edu/6.824/2014/notes/l04.txt)
-  - Homework: Begin [Lab 2](labs/lab-2.md) | [Part B](labs/lab-2.md#part-b-the-primarybackup-keyvalue-service)
+  - Homework: [Lab 2](labs/lab-2.md) | Begin [Part B](labs/lab-2.md#part-b-the-primarybackup-keyvalue-service) (Do steps 1-4)
 * Week 6 (6/8): [Paxos](readings/paxos-simple.pdf)
   - Lecture Notes: [Paxos](http://css.csail.mit.edu/6.824/2014/notes/l05-paxos.txt)
   - Homework: [Lab 2](labs/lab-2.md) | [Part B](labs/lab-2.md#part-b-the-primarybackup-keyvalue-service)
@@ -46,13 +46,13 @@ This is the course outline that we followed for the course:
   - Homework: Continue [Lab 4](labs/lab-4.md) | Part B
 * Week 13 (7/27): Ficus (1994) && Bayou (1995)
   - Homework: Finish [Lab 4](labs/lab-4.md) | Part B
-* Week 13 (8/3): PNUTS (2008) && Dynamo (2007)
+* Week 14 (8/3): PNUTS (2008) && Dynamo (2007)
   - Homework: Final Project
-* Week 13 (8/10): Kademilia (2002) && Trackerless Bittorent (2008)
+* Week 15 (8/10): Kademilia (2002) && Trackerless Bittorent (2008)
   - Homework: Final Project
-* Week 13 (8/17): Akkamai && Hubspot blog post
+* Week 16 (8/17): Akkamai && Hubspot blog post
   - Homework: Present Final Project
-* Week 13 (8/24): Bitcoin && AnalogicFS
+* Week 17 (8/24): Bitcoin && AnalogicFS
   - Homework: Present Final Project Cont'd
 
 Additional Papers:
