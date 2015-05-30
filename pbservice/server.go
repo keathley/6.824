@@ -11,7 +11,7 @@ import "syscall"
 import "math/rand"
 import "sync"
 
-//import "strconv"
+import "strconv"
 
 // Debugging
 const Debug = 0
@@ -44,14 +44,35 @@ func (pb *PBServer) Put(args *PutArgs, reply *PutReply) error {
 		reply.Err = ErrWrongServer
 		return err
 	}
-	lock.Lock()
-	if args.PutHash {
+	return pb.ForcePut(args, reply)
+}
 
+func (pb *PBServer) ForcePut(args *PutArgs, reply *PutReply) error {
+	var err error
+	lock.Lock()
+	var newVal string
+	if args.PutHash {
+		curVal := data[args.Key]
+		newVal = strconv.Itoa(int(hash(curVal + args.Value)))
 	} else {
-		data[args.Key] = args.Value
+		newVal = args.Value
 	}
+	data[args.Key] = newVal
+	requestLog[args.Client].lastPut = args.Version
+	requestLog
 	lock.Unlock()
+	pb.forwardRequest(args)
 	return nil
+}
+
+func (pb *PBServer) forwardRequest(args *PutArgs) {
+	if view.Backup != "" {
+		var reply PutReply
+		ok := call(view.Backup, "PBServer.ForcePut", args, &reply)
+		if !ok || reply.Err != OK {
+			pb.forwardRequest(args)
+		}
+	}
 }
 
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
@@ -63,6 +84,7 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	}
 	lock.RLock()
 	reply.Value = data[args.Key]
+	lock.RUnlock()
 	return nil
 }
 
@@ -87,7 +109,12 @@ func (pb *PBServer) tick() {
 
 func (pb *PBServer) handleBackup(old viewservice.View, newView viewservice.View) {
 	if old.Viewnum < newView.Viewnum && old.Primary == pb.me && old.Backup != newView.Backup {
-
+		args := &BackupArgs{data, requestLog}
+		var reply BackupReply
+		ok := call(newView.Backup, "Clerk.RecvBackup", args, &reply)
+		if !ok || reply.Err != OK {
+			pb.handleBackup(old, newView)
+		}
 	}
 }
 

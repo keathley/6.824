@@ -46,8 +46,10 @@ type BackupReply struct {
 }
 
 type ClientState struct {
-	lastGet uint
-	lastPut uint
+	lastGet       uint
+	lastGetResult string
+	lastPut       uint
+	lastPutResult string
 }
 
 // Your RPC definitions here.
