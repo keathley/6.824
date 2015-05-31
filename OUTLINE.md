@@ -3,94 +3,95 @@
 This is the course outline that we followed for the course:
 
 ## Week 0 (4/27)
-  - Reading: [MapReduce](readings/mapreduce.pdf)
-  - Lecture Notes: [Introduction](http://css.csail.mit.edu/6.824/2014/notes/l01.txt)
+  - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
+  - Lecture Notes: [Introduction](class_materials/notes/l01.txt)
   - Homework: None
 
 ## Week 1 (5/4)
-  - Reading: [MapReduce](readings/mapreduce.pdf)
-  - Lecture Notes: [At-Most-Once RPC](http://css.csail.mit.edu/6.824/2014/notes/l02.txt), [handout](http://css.csail.mit.edu/6.824/2014/notes/l02-rpc-mutex.go)
-  - Homework: [Lab 1](labs/lab-1.md) | [Part 1](https://github.com/keathley/6.824/blob/master/labs/lab-1.md#part-i-word-count)
-  - Suggested Readings:
+  - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
+  - Lecture Notes: [At-Most-Once RPC](class_materials/notes/l02.txt), [handout](class_materials/notes/l02-rpc-mutex.go)
+  - Homework: [Lab 1](sabs/lab-1.md) | [Part 1](class_materials/labs/lab-1.md#part-i-word-count)
+  - Suggested class_materials/readings:
     - [Golang Getting Started](https://golang.org/doc/install)
     - [A tour of Go](https://tour.golang.org/welcome/1)
     - [Effective Go](https://golang.org/doc/effective_go.html)
 
 ## Week 2 (5/11)
-  - Reading: [MapReduce](readings/mapreduce.pdf)
-    - Question: "How soon after it receives the first file of intermediate data can a reduce worker start calling the application's Reduce function? Explain your answer."
-  - Lecture Notes: [Fault Tolerance: primary/backup replication](http://css.csail.mit.edu/6.824/2014/notes/l03.txt)
-  - Homework: [Lab 1](labs/lab-1.md) | [Part 2](https://github.com/keathley/6.824/blob/master/labs/lab-1.md#part-ii-distributing-mapreduce-jobs)
-  - Suggested Readings:
+  - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
+    - Question: How soon after it receives the first file of intermediate data can a reduce worker start calling the application's Reduce function? Explain your answer.
+  - Lecture Notes: [Fault Tolerance: primary/backup replication](class_materials/notes/l03.txt)
+  - Homework: [Lab 1](class_materials/labs/lab-1.md) | [Part 2](class_materials/labs/lab-1.md#part-ii-distributing-mapreduce-jobs)
+  - Suggested class_materials/readings:
     - [Effective Go: Concurrency](https://golang.org/doc/effective_go.html#concurrency)
     - [Go Concurrency Patterns: Pipelines and cancellation](https://blog.golang.org/pipelines)
 
 ## Week 3 (5/18)
-  - Reading: [HyperVisor](readings/bressoud-hypervisor.pdf)
-    - Question: "What do you like best about Go? Why? Would you want to change anything in the language? If so, what and why?"
-  - Homework: [Part 3](labs/lab-1.md#part-iii-handling-worker-failures)
-  - Suggested Readings:
+  - Reading: [HyperVisor](class_materials/readings/bressoud-hypervisor.pdf)
+    - Question: What do you like best about Go? Why? Would you want to change anything in the language? If so, what and why?
+  - Homework: [Part 3](class_materials/labs/lab-1.md#part-iii-handling-worker-failures)
+  - Suggested class_materials/readings:
     - [Effective Go: Concurrency](https://golang.org/doc/effective_go.html#concurrency)
     - [Go Concurrency Patterns: Pipelines and cancellation](https://blog.golang.org/pipelines)
 
 ## Week 4 (5/27)
-  - Reading: [HyperVisor](readings/bressoud-hypervisor.pdf)
-    - Question: "Suppose that instead of connecting both the primary and backup to the same disk, we connected them to separate disks with identical copies of the data? Would this work? What else might we have to worry about, and what are some things that could go wrong?"
-  - Lecture Notes: [Fault Tolerance: primary/backup replication](http://css.csail.mit.edu/6.824/2014/notes/l03.txt)
-  - Homework: [Lab 2](labs/lab-2.md) | [Part A](labs/lab-2.md#part-a-the-viewservice)
+  - Reading: [HyperVisor](class_materials/readings/bressoud-hypervisor.pdf)
+    - Question: Suppose that instead of connecting both the primary and backup to the same disk, we connected them to separate disks with identical copies of the data? Would this work? What else might we have to worry about, and what are some things that could go wrong?
+  - Lecture Notes: [Fault Tolerance: primary/backup replication](class_materials/notes/l03.txt)
+  - Homework: [Lab 2](class_materials/labs/lab-2.md) | [Part A](class_materials/labs/lab-2.md#part-a-the-viewservice)
 
 ## Week 5 (6/1)
-  - Reading: [Flat Datacenter Storage](readings/fds.pdf)
-    - Question: "Suppose tractserver T1 is temporarily unreachable due to a network problem, so the metadata server drops T1 from the TLT. Then the network problem goes away, but for a while the metadata server is not aware that T1's status has changed. During this time could T1 serve client requests to read and write tracts that it stores? If yes, give an example of how this could happen. If no, explain what mechanism(s) prevent this from happening."
-  - Lecture Notes: [Flat Datacenter Storage case study](http://css.csail.mit.edu/6.824/2014/notes/l04.txt)
-  - Homework: [Lab 2](labs/lab-2.md) | Begin [Part B](labs/lab-2.md#part-b-the-primarybackup-keyvalue-service) (Do steps 1-4)
+  - Reading: [Flat Datacenter Storage](class_materials/readings/fds.pdf)
+    - Question: Suppose tractserver T1 is temporarily unreachable due to a network problem, so the metadata server drops T1 from the TLT. Then the network problem goes away, but for a while the metadata server is not aware that T1's status has changed. During this time could T1 serve client requests to read and write tracts that it stores? If yes, give an example of how this could happen. If no, explain what mechanism(s) prevent this from happening.
+  - Lecture Notes: [Flat Datacenter Storage case study](class_materials/notes/l04.txt)
+  - Homework: [Lab 2](class_materials/labs/lab-2.md) | Begin [Part B](class_materials/labs/lab-2.md#part-b-the-primarybackup-keyvalue-service) (Do steps 1-4)
 
 ## Week 6 (6/8)
-  - Reading: [Paxos](readings/paxos-simple.pdf)
-  - Lecture Notes: [Paxos](http://css.csail.mit.edu/6.824/2014/notes/l05-paxos.txt)
-    - Question: "Suppose that the acceptors are A, B, and C. A and B are also proposers. How does Paxos ensure that the following sequence of events can't happen? What actually happens, and which value is ultimately chosen?
-    A sends prepare requests with proposal number 1, and gets responses from A, B, and C.
-    A sends accept(1, "foo") to A and C and gets responses from both. Because a majority accepted, A thinks that "foo" has been chosen. However, A crashes before sending an accept to B.
-    B sends prepare messages with proposal number 2, and gets responses from B and C.
-    B sends accept(2, "bar") messages to B and C and gets responses from both, so B thinks that "bar" has been chosen."
+  - Reading: [Paxos](class_materials/readings/paxos-simple.pdf)
+  - Lecture Notes: [Paxos](class_materials/notes/l05-paxos.txt)
+    - Question:
+      Suppose that the acceptors are A, B, and C. A and B are also proposers. How does Paxos ensure that the following sequence of events can't happen? What actually happens, and which value is ultimately chosen?
+      A sends prepare requests with proposal number 1, and gets responses from A, B, and C.
+      A sends accept(1, "foo") to A and C and gets responses from both. Because a majority accepted, A thinks that "foo" has been chosen. However, A crashes before sending an accept to B.
+      B sends prepare messages with proposal number 2, and gets responses from B and C.
+      B sends accept(2, "bar") messages to B and C and gets responses from both, so B thinks that "bar" has been chosen."
 
-  - Homework: [Lab 2](labs/lab-2.md) | [Part B](labs/lab-2.md#part-b-the-primarybackup-keyvalue-service)
+  - Homework: [Lab 2](class_materials/labs/lab-2.md) | [Part B](class_materials/labs/lab-2.md#part-b-the-primarybackup-keyvalue-service)
 
 ## Week 7 (6/15)
-  - Reading: [Replication in the Harp File System](readings/bliskov-harp.pdf)
-    - Question: "Figures 5-1, 5-2, and 5-3 show that Harp often finishes benchmarks faster than a conventional non-replicated NFS server. This may be surprising, since you might expect Harp to do strictly more work than a conventional NFS server (for example, Harp must manage the replication). Why is Harp often faster? Will all NFS operations be faster with Harp than on a conventional NFS server, or just some of them? Which?"
-  - Homework: [Lab 3](labs/lab-3.md) | Part A
+  - Reading: [Replication in the Harp File System](class_materials/readings/bliskov-harp.pdf)
+    - Question: Figures 5-1, 5-2, and 5-3 show that Harp often finishes benchmarks faster than a conventional non-replicated NFS server. This may be surprising, since you might expect Harp to do strictly more work than a conventional NFS server (for example, Harp must manage the replication). Why is Harp often faster? Will all NFS operations be faster with Harp than on a conventional NFS server, or just some of them? Which?
+  - Homework: [Lab 3](class_materials/labs/lab-3.md) | Part A
 
 ## Week 8 (6/22)
-  - Reading: [Epaxos: There Is More Consensus in Egalitarian Parliaments](readings/epaxos.pdf)
-    - Question: "When will an EPaxos replica R execute a particular command C? Think about when commands are committed, command interference, read operations, etc."
-  - Homework: Begin [Lab 3](labs/lab-3.md) | Part B
+  - Reading: [Epaxos: There Is More Consensus in Egalitarian Parliaments](class_materials/readings/epaxos.pdf)
+    - Question: When will an EPaxos replica R execute a particular command C? Think about when commands are committed, command interference, read operations, etc.
+  - Homework: Begin [Lab 3](class_materials/labs/lab-3.md) | Part B
 
 ## Week 9 (6/29)
-  - Reading: [Spanner](readings/spanner.pdf)
-    - Question: "Suppose a Spanner server's TT.now() returns correct information, but the uncertainty is large. For example, suppose the absolute time is 10:15:30, and TT.now() returns the interval [10:15:20,10:15:40]. That interval is correct in that it contains the absolute time, but the error bound is 10 seconds. See Section 3 for an explanation TT.now(). What bad effect will a large error bound have on Spanner's operation? Give a specific example."
-  - Homework: [Lab 3](labs/lab-3.md) | Part B
+  - Reading: [Spanner](class_materials/readings/spanner.pdf)
+    - Question: Suppose a Spanner server's TT.now() returns correct information, but the uncertainty is large. For example, suppose the absolute time is 10:15:30, and TT.now() returns the interval [10:15:20,10:15:40]. That interval is correct in that it contains the absolute time, but the error bound is 10 seconds. See Section 3 for an explanation TT.now(). What bad effect will a large error bound have on Spanner's operation? Give a specific example.
+  - Homework: [Lab 3](class_materials/labs/lab-3.md) | Part B
 
 ## Week 10 (7/6)
   - Reading: Transaction Chains (2013)
-    - Question:  In the simple straw-man, both fetch and modify operations are placed in the log and signed. Suppose an alternate design that only signs and logs modify operations. Does this allow a malicious server to break fetch-modify consistency or fork consistency? Why or why not?
-  - Homework: [Lab 4](labs/lab-4.md) | Part A
+    - Question: In the simple straw-man, both fetch and modify operations are placed in the log and signed. Suppose an alternate design that only signs and logs modify operations. Does this allow a malicious server to break fetch-modify consistency or fork consistency? Why or why not?
+  - Homework: [Lab 4](class_materials/labs/lab-4.md) | Part A
 
 ## Week 11 (7/13)
   - Reading: Shared Virtual Memory (1986) && Treadmarks (1994)
     - Question: Memory Coherence in Shared Virtual Systems ivy-code.txt is a version of the code in Section 3.1 with some clarifications and bug fixes. The manager part of the WriteServer sends out invalidate messages, and waits for confirmation messages indicating that the invalidates have been received and processed. Suppose the manager send out invalidates, but did not wait for confirmations. Describe a scenario in which lack of the confirmation would cause the system to behave incorrectly. You should assume that the network delivers all messages, and that none of the computers fail.
-  - Homework: Begin [Lab 4](labs/lab-4.md) | Part B
+  - Homework: Begin [Lab 4](class_materials/labs/lab-4.md) | Part B
 
 ## Week 12 (7/20)
   - Reading: Spark (2012)
   - Question: What applications can Spark support well that MapReduce/Hadoop cannot support?
-  - Homework: Continue [Lab 4](labs/lab-4.md) | Part B
+  - Homework: Continue [Lab 4](class_materials/labs/lab-4.md) | Part B
 
 ## Week 13 (7/27)
   - Reading: Ficus (1994) && Bayou (1995)
     - Question About Ficus: Imagine a situation like the paper's Figure 1, but in which only Site A updates file Foo. What should Ficus do in that case when the partition is merged? Explain how Ficus could tell the difference between the situation in which both Site A and Site B update Foo, and the situation in which only Site A updates Foo.
     - Question Bayou: Suppose we build a distributed filesystem using Bayou, and the system has a copy operation. Initially, file A contains "foo" and file B contains "bar". On one node, a user copies file A to file B, overwriting the old contents of B. On another node, a user copies file B to file A. After both operations are committed, we want both files to contain "foo" or for both files to contain "bar". Sketch a dependency check and merge procedure for the copy operation that makes this work. How does Bayou ensure that all the nodes agree about whether A and B contain "foo" or "bar"?
-  - Homework: Finish [Lab 4](labs/lab-4.md) | Part B
+  - Homework: Finish [Lab 4](class_materials/labs/lab-4.md) | Part B
 
 ## Week 14 (8/3)
   - Reading: PNUTS (2008) && Dynamo (2007)
@@ -131,25 +132,25 @@ Additional Papers:
 # Idealized Outline - WIP
 
 ## Week 0
-  - Reading: [MapReduce](readings/mapreduce.pdf)
+  - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
 
-  - Homework [Lab 1](labs/lab-1.md) | [Part 1](https://github.com/keathley/6.824/blob/master/labs/lab-1.md#part-i-word-count)
-  - Suggested Readings:
+  - Homework [Lab 1](class_materials/labs/lab-1.md) | [Part 1](class_materials/labs/lab-1.md#part-i-word-count)
+  - Suggested class_materials/readings:
     - [Golang Getting Started](https://golang.org/doc/install)
     - [A tour of Go](https://tour.golang.org/welcome/1)
     - [Effective Go](https://golang.org/doc/effective_go.html)
 
 ## Week 1
-  - Reading: [MapReduce](readings/mapreduce.pdf)
-  - Homework: [Lab 1](labs/lab-1.md) | [Part 2](https://github.com/keathley/6.824/blob/master/labs/lab-1.md#part-ii-distributing-mapreduce-jobs) and [Part 3](labs/lab-1.md#part-iii-handling-worker-failures)
-  - Suggested Readings:
+  - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
+  - Homework: [Lab 1](class_materials/labs/lab-1.md) | [Part 2](class_materials/labs/lab-1.md#part-ii-distributing-mapreduce-jobs) and [Part 3](class_materials/labs/lab-1.md#part-iii-handling-worker-failures)
+  - Suggested class_materials/readings:
     - [Effective Go: Concurrency](https://golang.org/doc/effective_go.html#concurrency)
     - [Go Concurrency Patterns: Pipelines and cancellation](https://blog.golang.org/pipelines)
 
 ## Week 2
-  - Reading: [HyperVisor](readings/bressoud-hypervisor.pdf)
+  - Reading: [HyperVisor](class_materials/readings/bressoud-hypervisor.pdf)
   - Homework: [Lab 2] | [Part A]
 
 ## Week 3
-  - Reading: [Flat Datacenter Storage](readings/fsd.pdf)
+  - Reading: [Flat Datacenter Storage](class_materials/readings/fsd.pdf)
   - Homework: [Lab 2] | [Part B]

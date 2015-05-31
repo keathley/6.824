@@ -1,0 +1,426 @@
+6.824 2013 Lecture 3: Primary/Backup Replication
+
+today
+  state machine replication
+  primary / backup replication
+  explain lab 2 ideas
+  discuss paper
+
+today's goals:
+  availablity: still useable despite [some class of] failures
+  correctness: act just like a single server to clients
+  and handle network failures and repair
+
+approach: state machine replication
+  replicate state (e.g., key/value store)
+  apply operations in the same order
+     view each replica has a state machine
+     each replica starts in the same state
+     applies all operations in the same order
+     -> they end up in the same state
+  assumption: operations are deterministic
+     what is operation needs the time?
+     if two replicas call gettime() they may get different answers
+  many variants of state machine replication
+     today: primary/backup approach
+
+basic primary/backup idea
+  multiple clients, sending requests concurrently
+  two server roles: primary, backup
+    which server is primary may change due to failures
+  clients send operations to primary (e.g. Put, PutHash, Get)
+  primary chooses the order
+  primary forwards operations (or results) to backup
+  primary replies to client
+
+many challenges:
+  non-deterministic operations
+  network partition
+  state transfer between primary and backup
+  new backups after backup becomes primary
+
+two primary-back up systems today
+    Hypervisor-based fault tolerance
+	deals with non-determinism 
+        but doesn't tolerate network partitions
+    Lab 2
+        deals with network partition
+
+CASE STUDY: HYPERVISOR-BASED FAULT-TOLERANCE
+  Bressoud and Schneider (SOSP 1995)
+  Detailed description of a primary/backup system
+  Very general -- not application specific like the labs
+
+Motivation
+  Goal: fault tolerance / availability for any existing s/w
+    by running same instructions &c on two computers
+  Transparent: any app, any O/S
+  Would be magic if it worked well!
+  Failure model:  computer fail due to independent hw faults
+
+Plan 1:
+  [simple diagram]
+  Two machines
+  Identical start state: registers, program, memory contents
+  Maybe they will stay identical
+  If one fails, the other just keeps going, no time/data/work is lost
+
+What will go wrong with Plan 1?
+  external outputs will be duplicated
+  must send external inputs to both
+  inputs must arrive at the same time at both
+  interrupts must arrive at same time at both
+  CPUs unlikely to run at exactly the same speeds
+
+The basic plan:
+  Ignore backup's I/O instructions
+  Hide interrupts from backup
+  Primary forwards I/O results and interrupts to backup
+    Inject those interrupts into backup
+
+Q: do we have to be exact about timing of interrupts?
+   can backup just fake an interrupt when msg arrives from primary?
+
+How are they able to control I/O and interrupt timing?
+  they slip a virtual machine / hypervisor under the O/S
+  
+What is a hypervisor?
+  a piece of software
+  emulates a real machine precisely
+    so an O/S &c can run on a hypervisor
+    "guest"
+  as if hypervisor simulated each instruction
+    and kept simulated registers, memory, &c
+  BUT as much as possible runs guest on real h/w!
+    can be much faster than interpreting instructions
+  Many fascinating details, see VMware papers for x86 story
+
+Hypervisor gives us control
+  Suppress output from backup, detect interrupts/input at primary, &c
+  Still need a scheme for delivering I/O inputs and interrupts
+  From primary to backup, at the right times
+
+But: hard to know when interrupt happened at primary, repeat at backup
+  Answer: HP PA-RISC recovery counter
+    It forces an interrupt every N instructions
+  This allows primary and backup hypervisor to get control 
+    at exactly the same point in the code
+
+Epochs
+  Primary alternates epoch and end of epoch; backup does too
+  Every epoch is same # of instructions, e.g. 4000 instructions
+  Primary during epoch E:
+    Deliver interrupts buffered during E-1
+      Interrupts deliver input, and acknowlege output
+    Then continue executing
+    I/O instructions start input/output (but not done until interrupt)
+    Hypervisor hides new interrupts, just buffer, w/ I/O input
+  Primary at end of epoch E:
+    Send buffered interrupt info, including I/O input, to backup
+    Wait for backup to ACK
+    Send "done with E" to backup
+  Backup during epoch E:
+    Deliver interrupts, and I/O input,  primary told us of during E-1
+    Then continue executing
+    I/O instructions do nothing
+    Ignore interrupts from backup devices
+  Backup at end of epoch E:
+    Receive and buffer interrupt/input msgs from primary
+    Wait for "done with E+1" from primary
+    Start epoch E+1
+
+Note backup lags primary by one epoch
+  Backup doesn't start 7 until primary is done with 7
+    
+What if primary fails during epoch E?
+  Backup finishes with E-1
+  Backup times out waiting for "done with E"
+
+Can backup just switch to being primary for epoch E?
+  No: primary might have crashed in the middle of writing device registers
+  May not be correct for backup to repeat I/O register writes 
+  Example:
+    Maybe for a disk read the driver is required to write
+      disk controller registers in a specific order,
+      e.g. track #, sector #, length, DMA address
+    Primary did *some* of those writes before crashing
+    Backup might then write track # when h/w expecting sector #
+
+Good news: many h/w devices can be reset to known state
+  And I/O operations restarted
+  Existing drivers already know how to handle "please reset me" interrupts
+  At any rate, true for HP-UX disk driver
+
+Failover strategy:
+  Backup times out waiting for "done with E"
+  Backup executes epoch E as backup (no output, I/O suppressed)
+  Switches to primary for E+1
+  Hypervisor generates "uncertain interrupts" for I/O started <= E
+    Including suppressed I/O during failover epoch E
+  During E+1:
+    Drivers respond to uncert interrupts w/ reset, repeat of waiting I/O ops
+
+(all this is based on footnote 5 on page 4, and IO1 and P8 on page 5)
+
+Potential problem: repeated output
+  Maybe primary crashed just as it finished E
+  And it completed some output, e.g. disk write or network pkt send
+  Hypervisor will generate uncertain interrupt for those I/O ops
+  Backup will repeat them in E+1
+
+Will the outside world tolerate repeated output?
+  In general, maybe not
+    E.g. controlling an instrument in a scientific experiment
+  Network protocols:
+    No problem, Must handle duplicated packets anyway
+  Shared disk:
+    No problem, repeated write of same data 
+
+Do O/S drivers on primary talk directly to h/w?
+  I suspect O/S talks to device simulated/mediated by hypervisor
+  Hypervisor needs to be able to collect input read from
+    devices and sent it to backup
+  So hypervisor must be intervening (and understand) access to dev h/w
+  Also hypervisor must initialize dev h/w when backup takes over
+
+Figure 1 shows a shared disk
+  Rather than separate disk per machine with identical content
+  Only the primary writes the disk
+  Why does shared disk make the design easier?
+  Disk writes are non deterministic
+    one disk may have bad sector and write fails
+    so (unlike RAM) backup's disk won't naturally be identical to primary's
+  Simplifies recovery of failed machine
+    Don't need to copy whole disk from survivor
+
+Won't disk failures ruin the fault-tolerance story?
+  Can be fixed separately, w/ RAID
+  And my memory of 1990 is that disks failed much less often than
+   computers crashed
+
+Today's question:
+  What if system had private disks instead of one dual-ported disk?
+  Would that make the system more fault-tolerant?
+  should backup suppress disk I/O instructions?
+  should backup suppress disk interrupts?
+  should backup directly read its own disk?
+    or should primary forward read data?
+
+What if ethernet cable breaks?
+  primary still running
+  backup will try to promote itself
+  that's part of what the fail-stop assumption assumes away...
+  fail-stop is reasonable for a tightly coupled system
+    they could probably make a 10-foot ethernet pretty reliable
+    or have two separate ethernets
+
+What if we want to re-start a failed+repaired primary?
+
+What if the computers have multiple cores + threads?
+  Would this scheme work w/o modification?
+
+What we can expect for performance?
+
+When will performance be bad?
+  Frequent interrupts -- may be delayed by epoch scheme
+  Lots of input -- must be sent over ethernet
+  Many privileged instructions -- many hypervisor traps
+
+Should epochs be short or long?
+  Short means many end-of-epoch pauses + chatter
+  Long means less overhead
+    But I/O interrupts delayed longer
+
+What performance do they see?
+  CPU-bound: Figure 2
+
+Disk-bound (really seek-bound): Figure 3
+  Why do writes do better than reads?
+  Why much better relative performance for disk-bound than CPU-bound?
+  Why does Figure 3 write performance level off?
+    Why isn't it heading down towards 1.0, as in Figure 2?
+
+What is the limiting factor in performance?
+  442-microsecond epoch overhead
+  442 us is 22100 instructions (50 mHz)
+    So 22000-instruction epochs -> 2x slowdown for CPU-bound
+    Plus time to emulate privileged instructions
+
+Is the 442 microseconds CPU time, or network time?
+  Figure 4 ATM experiment suggests CPU time, but not clear
+
+Does anyone use these ideas today?
+  Five years ago I said "no" -- too slow
+    Instead, specialized replicated storage systems
+    Like my original client/server diagram, for put/get &c
+  But now: yes!
+  VMware has a fault-tolerant VM system
+  Same basic idea, but more complete and sophisticated
+  no epochs
+    primary has no restrictions on where interrupts occur
+    backup can cause them to occur at same place
+  primary holds each output until backup ACKs
+    to ensure backup will produce same output if primary fails
+    but primary can continue executing while it waits
+  fault-tolerant network disks
+  copes with partition by test-and-set on disk
+    at most one of primary and backup will win
+    no progress if network disk not reachable
+  automatic creation of new backup after failure
+    on some spare VM host, don't need to repair same hardware
+  much faster: only 10% slow-down, not paper's 2X
+
+PRIMARY-BACKUP REPLICATION IN LAB 2
+
+what wider classes of failure would we like to handle?
+  temporary or permanent loss of connectivity
+  network partitions
+  == can't know if a server is crashed or just not reachable
+
+what is the risk of having network failure between primary/backup
+  clients, primary, backup might not agree abt who is primary
+    or about whether backup is alive (and thus if it is up to date)
+  result:
+    two primaries
+    e.g. some clients switch to backup, others don't
+    or one client switches back and forth
+    they don't see each other's updates!
+    "split brain"
+    does *not* achieve goal of acting like single server
+
+lab 2 goals:
+  tolerate network problems, including partition
+    either keep going, correctly
+    or suspend operations until network is repaired
+  replacement of failed servers
+
+lab 2 overview:
+  agreement:
+    "view server" decides who p and b are
+    clients and servers ask view server
+    they don't make independent decisions
+    only one vs, avoids multiple machines independently deciding who is p
+  repair:
+    view server can co-opt "idle" server as b after old b becomes p
+    primary initializes new backup's state
+  the tricky part:
+    1. only one primary!
+    2. primary must have state!
+  we will work out some rules to ensure these
+
+view server
+  maintains a sequence of "views"
+    view #, primary, backup
+    1: S1 S2
+    2: S2 --
+    3: S2 S3
+  monitors server liveness
+    each server periodically sends a Ping RPC
+    "dead" if missed N Pings in a row
+    "live" after single Ping
+  can be more than two servers Pinging view server
+    if more than two, "idle" servers
+  if primary is dead
+    new view with previous backup as primary
+  if backup is dead, or no backup
+    new view with previously idle server as backup
+  OK to have a view with just a primary, and no backup
+    but -- if an idle server is available, make it the backup
+
+how to ensure new primary has up-to-date replica of state?
+  only promote previous backup
+  i.e. don't make an idle server the primary
+  but what if the backup hasn't had time to acquire the state?
+
+how to avoid promoting a state-less backup?
+  example:
+    1: S1 S2
+             S1 stops pinging viewserver
+    2: S2 S3
+             S2 *immediately* stops pinging
+    3: S3 --
+    potential mistake: maybe S3 never got state from S2
+    better to stay with 2/S2/S3, maybe S2 will revive
+    how can viewserver know it's OK to change views?
+  lab 2 answer:
+    primary in each view must acknowledge that view to viewserver
+    viewserver must stay with current view until acknowledged
+    even if the primary seems to have failed
+    no point in proceeding since not acked == backup may not be initialized
+
+Example from lab writeup [http://css.csail.mit.edu/6.824/2014/labs/lab-2.html]
+
+Q: can more than one server think it is primary?
+   1: S1, S2
+      net broken, so viewserver thinks S1 dead but it's alive
+   2: S2, --
+   now S1 alive and not aware of view #2, so S1 still thinks it is primary
+   AND S2 alive and thinks it is primary
+   => split brain, no good
+
+how to ensure only one server acts as primary?
+  even though more than one may *think* it is primary
+  "acts as" == executes and responds to client requests
+  the basic idea:
+    1: S1 S2
+    2: S2 --
+    S1 still thinks it is primary
+    S1 must forward ops to S2
+    S2 thinks S2 is primary
+    so S2 can reject S1's forwarded ops
+
+the rules:
+  1. primary in view i must have been primary or backup in view i-1 
+  2. primary must wait for backup to accept each request   (incl. get)
+  3. primary must wait responding to client until backup acked it execute request
+  4. non-backup must reject forwarded requests
+  5. non-primary must reject direct client requests
+  6. every operation must be before or after state transfer (see below)
+
+example:
+  1: S1, S2
+     viewserver stops hearing Pings from S1
+  2: S2, --
+  it may be a while before S2 hears about view #2
+  before S2 hears about view #2
+    S1 can process ops from clients, S2 will accept forwarded requests
+    S2 will reject ops from clients who have heard about view #2
+  after S2 hears
+    if S1 receives client request, it will forward, S2 will reject
+      so S1 can no longer act as primary
+    S1 will send error to client, client will ask vs for new
+       view, client will re-send to S2
+  the true moment of switch-over occurs when S2 hears about view #2
+
+how can new backup get state?
+  e.g. the key/value state
+  if S2 is backup in view i, but was not in view i-1,
+    S2 should ask primary to transfer the complete state
+
+rule for state transfer:
+  every operation (Put/Get) must be either before or after state xfer
+  if before, xferred state must reflect operation
+  if after, primary must forward operation after xfer finishes
+
+Q: does primary need to forward Get()s to backup?
+   after all, Get() doesn't change anything, so why does backup need to know?
+   and the extra RPC costs time
+
+A: Remember Get/Put/PutHash must provide exactly once semantics.
+    C1 sends Get to P, but not to B
+    C1 doesn't receive response
+    C2 sends Put, which is processed P and B
+    P fails
+    B takes over
+    C1 resends Get, and observes Put, even though it shoudn't
+
+Q: how could we make primary-only Get()s work?
+
+Q: are there cases when the lab 2 protocol cannot make forward progress?
+   Yes.  Many.
+   View service fails
+   Primary fails before it acknowledges view
+   Backup fails before it gets new state
+   ....
+   We will start fixing those in lab 3
+

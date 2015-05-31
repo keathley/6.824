@@ -1,0 +1,300 @@
+6.824 2014 Lecture 7: Harp
+==========================
+
+Replication in the Harp File System
+Liskov, Ghemawat, Gruber, Johnson, Shrira, Williams
+SOSP 1991
+
+Why do we need something more than Paxos?
+  Paxos is a useful building block for consensus.
+  Not quite enough to build an actual service; number of issues remain.
+  This and next lecture: how to build an actual replicated service.
+
+Why are we reading this paper?  Is it still relevant?
+  Complete case study of primary/backup (for a network file server)
+  Uses Paxos-like agreement for view change
+  Covers reconstruction of state after primary crash
+  Covers optimizations for performance
+  Covers modifications to make real service fit state machine framework
+  Interesting handling of simultaneous power failures
+
+Harp was the first complete primary/backup system that dealt w/ partition
+  It included an agreement system like Paxos, but not Paxos
+  It's not clear which came first
+
+Speculative in parts: authors did not implement the full system yet
+  Earlier paper (1988) describes the view change protocol in more detail:
+    http://www.pmg.csail.mit.edu/papers/vr.pdf
+  Much later (2006) paper on Viewstamped replication revisited:
+    http://pmg.csail.mit.edu/papers/vr-revisited.pdf
+    Much clearer, slightly different protocol
+
+Fault-tolerant
+  2b+1 servers
+  Can operate if b+1 are in good shape -- i.e. tolerate b failures
+  Much more aggressive reliability/availability goals than AFS
+    All data stored at least 2x; need 3x capacity in case of failure
+    Expensive in terms of server resources (at the time)
+    Now probably not such a big deal: Spanner is similarly expensive
+
+Why are 2b+1 servers necessary to tolerate b failures?
+  Suppose we have N servers, and execute a write.
+  Must proceed after hearing back from N-b: others might be dead.
+  But what if they were OK, just lost packets, and b out of (N-b) now fail?
+  Left with (N-2b) servers that heard the operation.
+  For the operation to not be lost, need N >= 2b+1
+
+Sophisticated recovery from many failure types
+  Up but not reachable / partitioned
+  Power failure, including simultaneous
+  Reboot, no RAM, preserved disk
+  Reboot, lost disk
+  *** not enough to have majority -- must recover latest data too!
+
+What's on the UPS?
+  Server itself; not necessarily network
+  When the UPS loses power input, tells server to flush to disk
+  How much data can we save in a few minutes (~200 seconds)?
+    Today: 100 MB/s * 200 seconds = 20 GB max in-memory log
+    Then (RA70): 1.4 MB/s * 200 seconds = 280 MB max in-memory log
+    For them, completely fine: RA70 had exactly 280 MB of capacity!
+    Even today, probably just fine: 20 GB RAM is not unreasonable.
+
+Basic operation
+  Clients, primary, backup(s), witness(es).
+  Client -> Primary
+  Primary -> Backups
+  Backups -> Primary
+    Primary waits for all backups / promoted witnesses in current view
+  Primary -> reply to Client
+  Primary -> tell Backups to Commit
+
+Design centered around log of operations
+  What is in a typical log record?
+    Client's file system operation, with request ID for duplicate detection.
+    Adjusted to account for any non-determinism.
+
+Why does Harp have so many log pointers?
+  FP most recent client request
+  CP commit point (real in primary, latest heard in backup)
+  AP highest record sent to disk on this node
+  LB disk has completed up to here
+  GLB all nodes have completed disk up to here
+
+Why the FP-CP gap?
+  So primary doesn't need to wait for ACKs from each backup
+    before sending next operation to backups
+  Higher throughput: can overlap waiting for ACKs, execution (different ops)
+  When might overlap be possible?
+
+Why the CP-AP gap?
+  Why not execute operation at CP?  Disk latency adds to client latency
+  What happens at CP?  Operation will definitely survive
+  How can you generate a reply before executing the operation?
+  What if some prev op in AP/CP gap affects result?
+    XX
+    Unclear from paper: scan the log?  replies that have no return value?
+  What happens at AP?  Apply process issues write to file system
+  When would AP fall behind CP?  Apply process not fast enough
+
+Why the AP-LB gap?
+  Allows delay between issue of op and when it must complete to disk
+  Why is this useful?
+    File system has its own buffer cache, keeps pending writes in memory.
+    Apply process issues operations one-at-a-time to the file system.
+    Another process watches when the operations hit disk, updates LB.
+    Allows FS, disk to schedule flushing-to-disk.
+
+What is the LB? How does Harp find out what the current LB is?
+  Separate process tracks which disk writes completed.
+  How to tell what disk writes correspond to an op?  Unclear.
+
+Why the LB-GLB gap?
+  I.e. why not delete log record when disk write completes locally?
+  Specific scenario when LB-GLB records are needed?
+    S1 crashes, comes back up
+    Need log records starting from S1's LB (within GLB)
+    LB of live servers has moved on
+
+Primary advances CP when it hears back from enough backups
+  What if backup's ACK is lost?
+  Server can resend operation to backup; backup can detect resends.
+
+Backup advances CP when it hears that the primary advanced its CP
+  Why can't the backup 
+
+How does failure recovery work?
+
+General setup for the following scenarios
+  5 servers, 1-5, 1 is usually primary, 2-3 backups, 4-5 witnesses
+
+First scenario: S2's cooling fan fails, so its cpu melts, and it crashes
+  new view
+    S4 is promoted (witness -> backup)
+    S4 gets log starting at GLB (i.e. all ops not known to be on disks)
+    S4 starts logging all operations to tape, but doesn't apply them
+    GLB advances, so primary discards log entries
+  why bother promoting S4?
+    maybe S2 is actually alive, so need to survive S1+S3 failing
+  S2 gets a new CPU and reboots
+  new view
+  S4 sends big log to S2, S2 plays it to get all missing operations
+  What's the earliest operation S2's disk might have missed?
+    right after S2's old LB, which is after GLB at start of new view
+    will be within S4's log
+
+New scenario: S2 suffers a disk failure, then repaired w/ new empty disk
+  S2 needs to get complete disk image + log from S1 or S3
+  Do we ever need to copy complete disk image if we didn't lose a disk?
+    Yes: first scenario, S4 loses its disk, S2 comes back, don't have all logs
+
+New scenario: What if S1 crashes just after replying to a client?
+  S2 declared new primary
+  Where will S2's FP and CP be after view change?
+  Will S3's disk+log naturally == S2's disk+log?
+    Might have some ops in S2's log that are not in S3's log (or vice-versa)
+    Primary might have been sending concurrent ops, crashed in the middle
+  Does S2 have to do anything special about ops between CP and FP?
+    Must commit ops that appeared in both S2+S3 logs
+    Can discard ops that did not appear in either S2's or S3's log
+      Could not have been committed: primary did not get ACK from someone
+
+After S1 recovers
+  Can we use its on-disk FS after replaying witness log?  Yes.
+  Could S1 have executed an op just before crashing
+    that the replicas didn't execute after taking over?
+    No, execution up to CP only, and CP is safe on S2+S3.
+
+Why does Harp use a log?
+  1. keep track of concurrent ops, for performance
+  2. holds tentative operations before all backups reply
+  3. help replicas ensure they are identical after primary crashes
+  4. bring separated server's disk up to date via replay
+
+All nodes suffer power failure just after S1 replies to a client.
+  Then they all re-start.
+    Assuming that UPS caused an orderly shutdown on each server.
+  Can they continue?
+    Should be able to: no failures, no state loss.
+  Where were the logs stored while the power was out?
+    Flush everything up to CP to disk, as usual (LB=AP=CP).
+    Also write out uncommitted entries: unknown fate (CP-to-FP).
+    On restart, resume just as if we just missed many messages.
+  What if they had all lost RAM content -- could they continue?
+    No, could have agreed to some operation that's now gone..
+  How do they tell the difference?
+    On-disk state must indicate clean vs. crashed state.
+    Crashed node (lost RAM) requires recovery protocol to catch up.
+      Goal: must catch up to the state as of the crash point (at least).
+      [ Ref: VR revisited section 4.3 ]
+      Tricky because crash point did not involve a disk write!
+    No other nodes can confirm what the state should be, in this scenario.
+
+Could Harp have been designed w/o UPS?
+  What would the price be?
+    Disk commit before every message.
+  Is it enough for just the primary to sync before sending reply to client?
+    No, also need all backups to sync before ACKing to primary.
+    Otherwise primary might crash after sending reply, and reply got lost.
+
+New scenario: S2 and S3 are partitioned (but still alive)
+  Can S1+S4+S5 continue to process operations?
+    Yes, promoted witnesses S4+S5
+  S4 moves to S2/S3 partition
+  Can S1+S5 continue?
+    No, primary S1 doesn't get enough backup ACKs
+  Can S2+S3+S4 continue?
+    Yes, new view copies log entries S4->S2, S4->S3, now S2 is primary
+
+New scenario: S2 and S3 are partitioned (but still alive)
+  S4 crashes, loses memory contents, reboots in S2/S3 partition
+  Can they continue?
+    Only if there wasn't another view that formed and committed more ops
+  How to detect?
+    Depends on what S4's on-disk view # says.
+    OK if S4's disk view # is same as S2+S3's.
+      No new views formed.
+      S2+S3 must have heard about all committed ops in old view.
+
+Everybody suffers a power failure.
+  S4 disk and memory are lost, but it does re-start after repair.
+  S1 and S5 never recover.
+  S2 and S3 save everything on disk, re-start just fine.
+  Can S2+S3+S4 continue?
+  (harder than it looks)
+    No, cannot be sure what state S4 had before failure.
+    Might have formed a new view with S1+S5, and committed some ops.
+
+In general, how do you know you can form a view?
+  They use a Paxos-like scheme, but that's not enough.
+  1. No other view possible.
+  2. Know view # of most recent view.
+  3. Know all ops from most recent view.
+  #1 is true if you have n+1 nodes in new view.
+  #2 is true if you have n+1 nodes that did not lose view # since last view.
+    View # stored on disk, so they just have to know disk is OK.
+    One of them *must* have been in the previous view.
+    So just take the highest view number.
+  And #3?
+    Need a disk image, and a log, that together reflect all operations 
+      through the end of the previous view.
+    Perhaps from different servers, e.g. log from promoted witness,
+      disk from backup that failed multiple views ago.
+    Acceptable plans:
+      - all n+1 nodes have intact RAM (must remember all committed ops)
+      - all nodes with lost RAM are from an earlier view
+      - most recent view's primary has intact RAM
+      [ VR page 14, left column ]
+
+If a node recovers w/ working disk, can you really replay a log into it?
+  What if log contains operations already applied to the disk?
+  [ Ref: section 4.4, shadow copies ]
+  XX basically physical logging?
+
+If a server crashes (no UPS), can it recover on-disk FS by replaying a log?
+  (A log from some other node.)
+  Would it be OK to recover FS on disk using fsck?
+    Bad idea: causes some effects that will not occur on other servers.
+
+If a node recovers w/o disk contents, i.e. w/ empty disk
+  Does it work to copy another server's disk?
+  What if the other server is actively serving Harp/NFS ops?
+  Can we avoid pausing for the entire time of disk copy?
+    XX copy-on-write snapshots?  [VR revisited]
+
+How does Harp handle read-only operations?
+  e.g. READ or GETATTR?
+  Why doesn't the primary have to consult the backups?
+    Leases!  Backups promise not to form a new view for some time.
+    The only ways for a write to be committed:
+      Through primary (this primary is certain other writes aren't going)
+      Forming a new view (but backups promised not to do this for a bit)
+    AFS uses a similar idea between clients + servers.
+  Why is it correct to ignore ops between CP and FP when generating the reply?
+    I.e. Section 4 says executes at CP
+    What if client sends WRITE then READ before WRITE reaches CP?
+    Insight: did not reply to the WRITE yet, so can pretend the READ was first
+
+What if a primary is partitioned, other servers have view change.
+  Will old primary still perform operations for clients?
+    RW: no
+    RO: within lease, so view change hasn't happened yet
+    Relaxed mode: yes, causes stale data in replies
+
+Does Harp have performance benefits?
+  In Fig 5-1, why isn't Harp *slower* than non-replicated server?
+  How much win would we expect by substituting RPC for disk operations?
+
+Why graph x=load y=response-time?
+  Why does this graph make sense?
+  Why not just graph total time to perform X operations?
+  One reason is that systems sometimes get more/less efficient w/ high load.
+  And we care a lot how they perform w/ overload.
+
+Why does response time go up with load?
+  Why first gradual...
+    Queuing and random bursts?
+    And some ops more expensive than others, cause temp delays.
+  Then almost straight up?
+    Probably has hard limits, like disk I/Os per second.
+    Queue length diverges once offered load > capacity

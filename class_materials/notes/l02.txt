@@ -1,0 +1,238 @@
+6.824 2013 Lecture 2: Infrastructure: RPC and threads
+
+Remote Procedure Call (RPC)
+  a key piece of distrib sys machinery; you have used it in lab 1
+  goal: easy-to-program network communication
+    hides most details of client/server communication
+    client call is much like ordinary procedure call
+    server handlers are much like ordinary procedures
+  RPC is widely used!
+
+RPC ideally makes net communication look just like fn call:
+  Client:
+    z = fn(x, y)
+  Server:
+    fn(x, y) {
+      compute
+      return z
+    }
+  RPC aims for this level of transparency
+
+RPC message diagram:
+  Client             Server
+    request--->
+       <---response
+
+Software structure
+  client app         handlers
+    stubs           dispatcher
+   RPC lib           RPC lib
+     net  ------------ net
+
+Examples from lab 1:
+  DoJob
+  ShutDown
+  Register
+ 
+A few details:
+  Marshalling: format data into packets
+    Tricky for arrays, pointers, objects, &c
+    something things you cannot pass: e.g., channels
+    Go's RPC library is pretty powerful!
+  Binding: how does client know who to talk to?
+    Might be a name service -- e.g. DNS
+  Threads:
+    Client often has many threads, so > 1 call outstanding, match up replies
+    Handlers may be slow, so server often runs each in a thread
+
+RPC problem: what to do about failures?
+  e.g. lost packets, broken network, crashed servers
+
+What does a failure look like to the RPC library?
+  It never sees a response from the server
+  It does *not* know if the server saw the request!
+    Maybe server/net failed just before sending reply
+
+Simplest scheme: "at least once" behavior
+  RPC library waits for response for a while
+  If none arrives, re-send the request
+  Do this a few times
+  Still no response -- return an error to the application
+
+Q: is "at least once" easy for applications to cope with?
+
+Simple problem (non-replicated key/value server)
+  client sends Put(a)
+  server gets request, but network drops reply
+  client sends Put(a) again
+  should server respond "yes"?
+  or "no"?
+  what if it isn't a put but "deduct $10 from bank account"
+
+Harder problem:
+  Put(a)  -- but network delays the packet
+  Put(a) -- response arrives
+  now network delivers the delayed Put(a) !!!
+
+Is at-least-once ever OK?
+  yes: if no side effects -- read-only operations (or idem-potent ops)
+  yes: if application has its own plan for detecting duplicates
+    which you will need for Lab 1
+
+Better RPC behavior: "at most once"
+  idea: server RPC code detects duplicate requests
+    returns previous reply instead of re-running handler
+  client includes unique ID (UID) with each request
+    uses same UID for re-send
+  server:
+    if seen[uid]:
+      r = old[uid]
+    else
+      r = handler()
+      old[uid] = r
+      seen[uid] = true
+
+some at-most-once complexities
+  how to ensure UID is unique?
+    big random number?
+    combine unique client ID (ip address?) with sequence #?
+  server must eventually discard info about old RPCs
+    when is discard safe?
+    idea:
+      unique client IDs
+      per-client RPC sequence numbers
+      client includes "seen all replies <= X" with every RPC
+      much like TCP sequence #s and acks
+    or only allow client one outstanding RPC at a time
+      arrival of seq+1 allows server to discard all <= seq
+    or client agrees to keep retrying for < 5 minutes
+      server discards after 5+ minutes
+  how to handle dup req while original is still executing?
+    server doesn't know reply yet; don't want to run twice
+    idea: "pending" flag per executing RPC; wait or ignore
+
+What if an at-most-once server crashes?
+  if at-most-once duplicate info in memory, server will forget
+    and accept duplicate requests
+  maybe it should write the duplicate info to disk?
+  maybe replica server should also replicate duplicate info?
+
+What about "exactly once"?
+  at-most-once plus unbounded retries
+
+Go RPC is "at-most-once"
+  open TCP connection
+  write request to TCP connection
+  TCP may retransmit, but server's TCP will filter out duplicates
+  no retry in Go code (i.e. will NOT create 2nd TCP connection)
+  Go RPC code returns an error if it doesn't get a reply
+    perhaps after a timeout (from TCP)
+    perhaps server didn't see request
+    perhaps server processed request but server/net failed before reply came back
+
+Go RPC's at-most-once isn't enough for Lab 1
+  it only applies to a single RPC call
+  if worker doesn't respond, the master re-send to it to another worker
+    but original worker may have not failed, and is working on it too
+  Go RPC can't detect this kind of duplicate
+    In lab 2 you will have to protect against these kinds of duplicates
+
+Threads
+  threads are a fundamental server structuring tool
+  you'll use them a lot in the labs
+  they can be tricky
+  go well together with RPC 
+
+Thread = "thread of control"
+  threads allow one program to (logically) do many things at once
+  the threads share memory
+  each thread includes some per-thread state:
+    program counter, registers, stack
+
+Threading challenges:
+  sharing data between thread 
+     race conditions
+     need to protect invariants on shared data (go: mutex)
+  coordination between threads (go: channels)
+  deadlock 
+     thread 1 is waiting on thread 2
+     thread 2 is waiting on thread 1
+     easy detectable (unlike races)
+  lock granularity
+     goarse-grained -> little concurrency/parallelism
+     fine-grained -> lots of concurrency, but race and deadlocks
+  [Use RPC package to illustrate these issues]
+
+let's look at today's handout -- l02-rpc-lock.go and l02-rpc-chan.go
+  it's a toy RPC system
+  illustrates threads, mutexes, channels
+  it's a toy
+    assumes connection already open
+    only supports an integer arg, integer reply
+    doesn't deal with errors
+
+struct ToyClient
+  client RPC state 
+  mutex per ToyClient
+  connection to server (e.g. TCP socket)
+  xid -- unique ID per call, to match reply to caller
+  pending[] -- multiple threads may call, need to find them
+    chan on which caller is waiting
+
+Call
+  application calls reply := client.Call(procNum, arg)
+  procNum indicates what function to run on server
+  WriteRequest knows the format of an RPC msg
+    basically just the arguments turned into bits in a packet
+  Q: could we move "xid := tc.xid" outside the mutex?
+     after all, we are not changing anything
+     or is there a race then?
+  Q: do we need to write inside the mutex?
+  note: Go says you are responsible for preventing concurrent map ops
+    that's one reason the update to pending is locked
+  [ draw timing diagram on the board to show race]
+
+Listener
+  runs as a background thread
+  not quite right that it may need to wait on chan for caller
+
+Q: what if reply comes back very quickly?
+   could Listener() see reply before pending[xid] entry exists?
+   or before caller is waiting for channel?
+
+Dispatcher
+  note that the Dispatcher echos the xid back to the client
+    so that Listener knows which Call to wake up
+  Q: why run the handler in a separate thread?
+
+main()
+  note registering handler in handlers[] 
+  what will the program print?
+
+
+Beware: this code is not correct:
+  var x int
+  done := false
+  go func() { x = f(...); done = true }
+  while done == false { }
+  it's very tempting to write, but Go spec says it's undefined
+    use a channel or sync.WaitGroup instead
+
+l02-rpc-chan.go: channel version of toy rpc library
+  Go encourages programmers to use channels to manage concurrency
+  structure your concurrent application using channels and select
+    if goroutines don't share memory, then no locks are needed
+       works if you can arrange that all sharing happens through messages
+  note, however, you can still have deadlocks
+     say you have  channel with capacity of 1
+     goroutine writes into channel a
+     goroutine writes into channel a again
+        this blocks
+     if the intended receiver is sending several messages on another channel to the sender
+        then deadlock
+     go detects such deadlocks for you
+
+go's RPC implementation uses a mixture of locks and channels  
+
+Study the Go tutorials on goroutines and channels
+

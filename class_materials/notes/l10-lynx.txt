@@ -1,0 +1,341 @@
+6.824 2014 Lecture 10: Distributed transactions
+===============================================
+
+topic: coordinating execution across multiple machines
+  subtly different goal from last few lectures
+  previously: how to tolerate faults using replicas + paxos
+  will see shortly why these are different topics
+
+plan:
+  1. (simplified) review of two-phase commit / two-phase locking
+  2. lynx
+
+typical scenario: airline, hotel, bank
+  user wants to get airline ticket and hotel room, pay from his bank account
+  straightforward approach:
+    client reserves airline ticket
+    airline transfers money from bank account
+    client reserves hotel room
+    hotel transfers money from bank account
+  what might go wrong?
+    no more hotel rooms after booking airline ticket
+      undesirable for customer
+    airline system crashes after transferring money but before reserving seat
+      undesirable for customer
+    or airline system crashes after reserving seat but before transferring money
+      undesirable for airline
+  goal: all-or-nothing atomicity
+    i.e., either all parts executed, or none of them did
+    challenging because parts run on different machines
+
+achieving all-or-nothing atomicity: two-phase commit (2PC)
+  coordinator is in charge of orchestrating user's transaction
+  coordinator sends Prepare message to all servers
+  each server decides if their part of the transaction can execute
+    send back PrepareOK or PrepareAbort response to coordinator
+    e.g., abort causes in our example:
+      no seats left on flight
+      no rooms left in hotel
+      insufficient money in bank account
+  if any server says PrepareAbort, coordinator sends Abort to all servers
+    servers don't perform their part of transaction
+  if all servers say PrepareOK, coordinator sends Commit to all servers
+    servers execute their part of transaction
+  at least in the simple case, 2PC achieves all-or-nothing atomicity
+    transaction commits only if all servers are willing to execute it
+    coordinator sends commit messages to all servers, so all should execute
+  two complications: concurrency and failures
+
+2PC with concurrency
+  what if another op tries to execute on a server between Prepare + Commit?
+  if server said PrepareOK, then promised to commit later
+  cannot execute any operation that can preclude later commit
+  Prepare makes a reservation, Commit actually commits it
+    e.g., reserve seat/room, place a hold for some amount of $ in bank account
+  concurrent operations cannot violate this reservation
+  often done using locks: lock bank account, lock seat assignment, ..
+  will say more about concurrency later on: two-phase locking (2PL)
+
+2PC with network failures
+  server doesn't hear from coordinator (Prepare)
+    no problem -- as if nothing happened at that server
+    coordinator can't commit without hearing from every server
+  coordinator doesn't hear back from some server (PrepareOK or PrepareAbort)
+    coordinator can retransmit Prepare request
+    coordinator picks a unique txn id, which goes into all messages
+    always safe for coordinator to abort (e.g., in case of a timeout)
+  server doesn't hear from coordinator (Abort / Commit)
+    if sent PrepareAbort, no problem: the only possible outcome is abort
+    if sent PrepareCommit, have to block: must be prepared to commit
+    can contact coordinator to learn outcome
+    cannot release reservation/locks until committed or aborted
+
+2PC with server crashes
+  if server is part of an outstanding transaction, must remember state on disk
+    i.e., if replied PrepareOK but haven't heard back either Abort or Commit
+    must remain prepared to Commit: continue to hold reservation/locks
+  if server eventually comes up, has to learn outcome from coordinator
+  coordinator must remember transaction outcome until acked by all servers
+
+2PC with coordinator crashes
+  don't need to remember transactions that were aborted: safe to abort
+  don't need to remember transactions that didn't get decided: safe to abort
+  must remember committed transactions that haven't been ACKed by all servers
+    cannot just abort them: might have sent Commit to some servers already
+    server might not have heard whether transaction committed or aborted
+
+why do we need 2PC when we already have Paxos?
+  could three servers decide to commit if a majority is up and commits?
+    no: cannot commit if hotel has no rooms, even if airline + bank are ok
+  Paxos useful when servers hold the same state (replicas)
+    all servers execute same operation, in the same way (commit or abort)
+    any server can predict what any other server will do
+    no need to consult every server -- there's just one operation
+    if majority agrees, rest of servers will follow, and obtain the same result
+  2PC useful when servers hold different state
+    all servers execute different operations
+    one server cannot predict what another server will do
+    have to consult every server
+  not practical for all servers to hold same state
+    fundamentally, cannot have all data live on a single server
+    either administrative/policy reasons or capacity/performance reasons
+  if operation involves many servers with different state, may need 2PC
+
+2PC in practice
+  some unfortunate properties:
+    servers have to hold reservations/locks until abort/commit
+    coordinator has to be highly available (otherwise servers wait forever)
+  rarely used across systems (like our airline/hotel/bank example)
+    cross-system dependencies are not a great design
+    e.g., airline cannot sell seats if third-party coordinator is slow/failed
+    typically cross-system operations rely on undo/compensation/reconciliation
+    e.g., airline allows free ticket cancelation within 24 hours
+  sometimes used within a single distributed system
+    e.g., spanner: data stored in shards, 2PC used for cross-shard transactions
+      coordinator can be made highly available using paxos
+    lab4 also has a sharded key/value store
+      but does not involve 2PC
+      all client operations involve just one key (put/get)
+      just one shard/server affected by a given operation
+
+what about ordering of distributed transactions?
+  suppose we have a bank with accounts stored on two shards / servers
+  transaction 1: xfer $100 from A's account to B's account (different shards)
+  transaction 2: compute sum of A's and B's accounts
+  possible problem: T2 reads A, then T1 xfers $100, then T2 reads B
+    sum includes the $100 twice
+  goal: before-or-after atomicity
+    "as if" entire transaction 1 ran before (or after) transaction 2
+  traditional solution: two-phase locking (2PL)
+    lock every object accessed in a transaction
+    release all locks after transaction commits or aborts
+  when T2 reads A, it acquires A's lock
+    prevents T1 from acquiring A's lock
+    T2 finishes reading B's account, then releases A's lock
+    now T1 can continue executing
+  opposite order enforced when T1 acquires A's lock first
+  achieves linearizability (or "strong serializability")
+    as if transactions ran serially, one after another
+    if T1 finished before T2 started, then T1 will appear to run before T2
+
+2PC/2PL achieve strong guarantees for distributed transactions
+  all-or-nothing atomicity
+  before-or-after atomicity
+  nice to have (easy to program with), but costly (performance)
+    coordinator must contact all servers: high latency
+
+lynx: case study of how to reconcile this tension in distributed transactions
+  sharded database
+    SQL-like relational table structure
+    rows in a single table might be spread over many machines / data centers
+  configuration service tells clients what server maintains what shard
+    much like lab4
+  why shard the database?
+    capacity: users cannot fit on single server
+    locality: users don't want to wait for round-trip to single data center
+      place user's data in data center near that user's physical location
+  ambitious goals:
+    distributed transactions
+    all-or-nothing atomicity
+    before-or-after atomicity
+    low latency
+  why atomic cross-shard transactions?
+    auction application: atomically place bid on item
+      affects multiple tables: Bids, Items, Users, ..
+    social networking application: atomically add friend
+      affects friends table, activities table (announce new friend)
+  research system
+    prototype exploring ideas
+    no real deployment
+    smaller-scale evaluation, compared to Spanner
+    but nonetheless design contains some interesting ideas
+  some aspects not implemented
+    failure recovery
+    fallback to full 2PC/2PL
+    shard-server mapping is static
+
+example application: auction [ based on Figures 1, 5, 7 ]
+  Bids table: bidder, seller, itemid, price
+    sharded by bidder
+  Items table: seller, itemid, price
+    sharded by seller
+
+what does a distributed transaction look like in lynx?
+  transaction chain: sequence of local operations (hops) on individual servers
+    each local operation executes atomically (e.g., locks the database)
+    first hop acts as the coordinator for the rest of the transaction
+    executes it hop-by-hop on appropriate servers
+  e.g., placing a bid [ based on Figure 7 ]
+    insert a bid into the Bids table
+    update price in the Items table (if new bid is higher)
+
+how does lynx achieve low latency?
+  don't wait for all servers involved in transaction: so, not 2PC/2PL
+  only the first participant can choose to abort (others cannot)
+  the before-or-after atomicity guarantee is slightly weaker
+
+what if another transaction accesses the same data, concurrent with place_bid?
+
+scenario: place_bid || (look up current list of bids by a given user (bidder))
+  no problem: place_bid returns after first hop commits
+  reading Bids table will return new bid
+  if lookup runs before place_bid, does not observe new bid
+
+scenario: place_bid || (look up current price of an item)
+  maybe the second hop of place_bid hasn't executed yet
+  may observe the old price in Items table, even though Bids was updated
+
+why is this legal?
+  serializability: execution is equivalent to some serial order
+  this serial order need not be the order in which transactions were issued
+  re-ordering: later transaction "appears" to run first
+  not linearizability / strict serializability (as achieved by 2PL)
+
+what to do about this problem?
+  lynx: "read-my-writes" guarantee
+    chain guaranteed to observe prior writes from same session
+  can still observe inconsistency: two users talk to each other out-of-band
+    does this matter?
+    how big can this inconsistency window get?
+      potentially arbitrarily large
+      if intermediate hop server/network is slow, chain will get stuck there
+
+suppose Alice places bid, checks item's price, then tells Bob about item
+  will Bob see the new price?
+  yes, because:
+    read-my-writes ensures Alice's read will run after Alice's write to Items
+    after this, any read from Bob will also observe new item price
+
+scenario: place_bid || (look up item price (Items table),
+                        then find highest bid (Bids table))
+  should return the same thing, if txns have before-or-after atomicity
+  naively running this transaction chains, could observe atomicity violation
+    first hop: saw old price in Items table
+    second hop: saw new, higher bid in Bids table
+
+how does lynx deal with this atomicity violation?
+  analyze transactions for conflicts
+    assumes all transactions are known ahead of time (why is this reasonable?)
+    but does not require knowing the arguments to transactions
+  consider all pairs of transaction, and the hops in those transactions
+    S (sibling) edges between hops: hops are part of the same txn
+    C (conflict) edges between hops: hops conflict
+  is a "conflict" the same thing in lynx and epaxos?
+    yes, same notion: order of operations matters
+  SC analysis helps determine if it's safe to run hops individually (no 2PL)
+    problem if there exists an SC cycle (cycle containing both S & C edges)
+    e.g.: reading Items table: no SC cycle, serializable if run hop-by-hop
+    e.g.: reading Items then Bids: SC cycle, not serializable if run hop-by-hop
+
+what to do if there's an SC cycle?
+  in principle, paper says could use 2PC/2PL
+  in practice, lynx did not implement 2PC/2PL
+  application developer should try hard to avoid these situations
+  e.g., two place_bid invocations
+    SC cycle: might require 2PC/2PL
+    authors suggest Bids insert does not conflict: commutative
+
+is it always sufficient to wait for the first hop?
+  application-dependent
+  example from section 4.3: changing privacy settings across many shards
+    don't want subsequent posts to appear before privacy setting change
+    wait for entire privacy-changing chain to complete
+
+is it necessary to wait for even the first hop to commit?
+  should be enough if first hop simply records the transaction chain
+    acts as coordinator for the entire chain
+  lynx application cannot tell whether server is doing this
+    all txns on that hop will execute in order
+    later txns will wait for prior txns to finish executing
+
+derived tables
+  might want to maintain another view of the same table
+  why?
+    different sharding plan
+    efficient lookups by different key
+  e.g., Bids table sharded by seller instead of bidder, or by time
+  when base table updated, lynx creates "sub-chains" to update derived tables
+
+why is origin ordering necessary?
+  avoids SC cycle problems due to updating multiple derived tables
+  e.g., updating Bids-by-seller, Bids-by-time, etc
+
+how is origin ordering implemented?
+  first hop is in charge of executing all later hops
+  first hop server maintains counters for messages sent to other servers
+  when new chain arrives at first hop, counter values assigned to all hops
+  other servers execute incoming messages in sequential order
+    if server received a hop out-of-order, will wait
+  e.g., above example with Bids-by-seller, Bids-by-time
+
+how is read-my-writes implemented?
+  per-session origin (first hop of txns in that session) + origin ordering
+  session's first hop (origin) sees all transaction chains from that session
+  ensures all of their hops execute in order they arrive at first hop
+
+can we get linearizability by putting everyone in the same session?
+  read-my-writes will ensure linearizability
+  but we will lose scalability: single session's server will be the bottleneck
+
+derived tables
+  sub-chains to update the derived tables
+  why wait for entire derived table update sub-chain to complete?
+  what if another chain reads derived table instead of primary table?
+    could get old data in derived table, even though primary table updated
+    to detect inconsistency, would need an SC cycle -- analysis would catch
+    otherwise, at most a linearizability violation (but still serializable)
+
+when might transaction chains work well?
+  need all-or-nothing atomicity
+  need serializability
+  don't need linearizability
+  transactions are relatively simple / conflict-free (no SC cycles)
+
+when might transaction chains not work well?
+  don't know transactions ahead of time (cannot analyze for SC cycles)
+  need linearizability
+  lots of chains converge on a single non-first-hop server
+    first-hop servers queue up lots of pending chains
+    all of them block waiting to execute hop on bottleneck server
+
+Spanner vs. Lynx
+  is Spanner strictly better?
+    simpler to program, but higher latency for cross-shard transactions
+  how important is this?
+    depends entirely on the application
+  how would you implement auction in spanner?
+    option 1: transaction modifying Bids and Items
+      wait to contact both bidder's and seller's data centers
+      might be far away: australia, etc
+      so, high latency
+    option 2: separately modify Bids and Items
+      no all-or-nothing atomicity: might insert bid, crash before updating price
+      no before-or-nothing atomicity: might have unexpected interleavings
+      so, difficult to get consistency
+  with lynx, somewhat easier to achieve low latency and consistency
+    but does require programmer to think a bit more about consistency
+
+references:
+  http://en.wikipedia.org/wiki/Two-phase_commit_protocol
+  http://www.youtube.com/watch?v=-5pLcTaDYEg
+

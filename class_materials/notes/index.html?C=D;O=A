@@ -1,0 +1,40 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+ <head>
+  <title>Index of /6.824/2014/notes</title>
+ </head>
+ <body>
+<h1>Index of /6.824/2014/notes</h1>
+  <table>
+   <tr><th valign="top"><img src="/icons/blank.gif" alt="[ICO]"></th><th><a href="?C=N;O=A">Name</a></th><th><a href="?C=M;O=A">Last modified</a></th><th><a href="?C=S;O=A">Size</a></th><th><a href="?C=D;O=D">Description</a></th></tr>
+   <tr><th colspan="5"><hr></th></tr>
+<tr><td valign="top"><img src="/icons/back.gif" alt="[PARENTDIR]"></td><td><a href="/6.824/2014/">Parent Directory</a></td><td>&nbsp;</td><td align="right">  - </td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/folder.gif" alt="[DIR]"></td><td><a href="dht/">dht/</a></td><td align="right">2014-12-08 14:33  </td><td align="right">  - </td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="ivy-code.txt">ivy-code.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">1.8K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/layout.gif" alt="[   ]"></td><td><a href="l01-handout.pdf">l01-handout.pdf</a></td><td align="right">2014-12-08 14:33  </td><td align="right">5.6K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/unknown.gif" alt="[   ]"></td><td><a href="l01.go">l01.go</a></td><td align="right">2014-12-08 14:33  </td><td align="right">2.3K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l01.txt">l01.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 11K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/unknown.gif" alt="[   ]"></td><td><a href="l02-rpc-chan.go">l02-rpc-chan.go</a></td><td align="right">2014-12-08 14:33  </td><td align="right">3.9K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/unknown.gif" alt="[   ]"></td><td><a href="l02-rpc-mutex.go">l02-rpc-mutex.go</a></td><td align="right">2014-12-08 14:33  </td><td align="right">3.5K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l02.txt">l02.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">7.9K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l03.txt">l03.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 15K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l04.txt">l04.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">8.2K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l05-paxos.txt">l05-paxos.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 13K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l07-harp.txt">l07-harp.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 13K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l08-epaxos.txt">l08-epaxos.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 14K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l09.txt">l09.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 12K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l10-lynx.txt">l10-lynx.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 16K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l11.txt">l11.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 11K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l12-treadmarks.txt">l12-treadmarks.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">9.6K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l13-spark.txt">l13-spark.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">9.1K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l14-ficus.txt">l14-ficus.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 11K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l15-bayou.txt">l15-bayou.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 11K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l15.txt">l15.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right">9.4K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l16-pnuts.txt">l16-pnuts.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 15K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l17-dynamo.txt">l17-dynamo.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 10K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="l20-bitcoin.txt">l20-bitcoin.txt</a></td><td align="right">2014-12-08 14:33  </td><td align="right"> 12K</td><td>&nbsp;</td></tr>
+<tr><td valign="top"><img src="/icons/text.gif" alt="[TXT]"></td><td><a href="paxos-code.html">paxos-code.html</a></td><td align="right">2014-12-08 14:33  </td><td align="right">1.0K</td><td>&nbsp;</td></tr>
+   <tr><th colspan="5"><hr></th></tr>
+</table>
+<address>Apache/2.4.7 (Ubuntu) Server at css.csail.mit.edu Port 80</address>
+</body></html>

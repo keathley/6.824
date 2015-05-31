@@ -1,0 +1,345 @@
+6.824 2014 Lecture 8: Egalitarian Paxos
+=======================================
+
+broader picture: how to build a complete, fault-tolerant distributed system?
+  as we are seeing, there's lots of issues to worry about
+    consensus (paxos)
+    persistence (harp)
+    performance (epaxos)
+    ...
+  why are we reading these papers?
+    you might end up building large-scale distributed systems
+    papers will help you understand many of these issues
+    some clear techniques / protocols that you can just use
+    some design patterns or approaches
+    still a hard problem
+  papers focus on different aspects of system design
+    e.g., harp focuses on persistence, recovery, restoring state
+    epaxos does not explain how to address these in detail
+    in practice, will often need to combine ideas from multiple papers
+  epaxos is a high-performance paxos-based RSM system
+    to understand epaxos, will first discuss several simpler designs
+
+one approach: harp: primary-backup, use paxos to agree on views
+  what's wrong with this plan?
+  - recovering from primary or backup failure takes a long time.
+  - throughput limited by slowest of primary / backup.
+
+another approach: lab 3b: use paxos to agree on each operation
+  simple
+  doesn't deal with any problems that harp faced (persistence)
+  doesn't care about performance almost at all
+
+how does lab 3b work?
+  work through example scenarios
+  how to pick log position for new ops?
+    simple plan: px.Max+1
+  what happens if we guess too low?
+    learn the decided value, which increases px.Max; try again
+  what happens if we guess too high?
+    paxos succeeds just fine
+  when can we reply to the client?
+    if the operation requires no response, reply after paxos agreement
+    if operation requires response, have to apply request log entry
+  when can we apply the log's entries?
+    cannot apply an operation when it's agreed upon by paxos
+    must apply all log entries in-order
+    replica has to remember last applied op
+    periodically check if next op is decided; if so, apply it
+  what if next op will never be decided (guessed too high)?
+    know that client is waiting for response to higher op
+    propose a nop in this case, wait for a while
+  what if proposer fails?
+    same: propose a nop, wait for a while
+    might learn the nop, or the real op
+  what happens to client if it doesn't hear back from server?
+    request contains client/reqid
+    server state is both the kv-map and reply-map
+    ensures exactly-once across all replicas
+
+performance cost for lab 3b
+  client -> any server
+  server acts as proposer
+  proposer -> acceptors: prepare (2f+1)
+  acceptors -> proposer: prepare_ok (at least f+1)
+  proposer -> acceptors: accept (2f+1)
+  acceptors -> proposer: accept_ok (at least f+1)
+  proposer -> learners: decided (2f+1)
+
+what if two servers try to execute an operation in the same slot?
+  paxos ensures only one will be committed in the slot
+  but can take a large number of messages (unbounded)
+
+system-level optimization: designated leader ("multi-paxos")
+  avoid the prepare/prepare_ok phase: prepare all future instances upfront
+  avoid dueling leaders
+  how does designated leader election work?
+  what happens when designated leader fails?
+  what if we get two designated leaders?
+
+what are the performance costs of multi-paxos?
+  client -> designated leader
+  leader -> acceptors: accept (2f+1)
+  acceptors -> leader: accept_ok (at least f+1)
+  leader -> learners: decided (2f+1)
+  in the common case, no dueling proposers
+
+[ paxos-level optimization: acceptors send accept_ok directly to learners ]
+  learners can infer decided
+  lower latency until all learners get the result
+  more messages sent overall (each acceptor to each learner)
+  about the same client latency (leader learns outcome, replies to client)
+
+[ paxos-level optimization: clients directly send accept to acceptors ]
+  called "fast-paxos"
+  2 message delays in the common case of no conflicts
+  need a recovery protocol (another 2 message delays) for conflict resolution
+
+main limitation of multi-paxos: all requests go to the same designated leader
+  leader must process many paxos messages for each client request
+  leader will be bottlenecked on CPU, network before other replicas
+  [ fast-paxos not a great fit when many clients issue requests: conflicts ]
+
+[ system-level optimization: batching ]
+  put many ops into a single paxos slot
+  better throughput: just one paxos exchange for N ops
+  worse latency: ops waiting for a batch to fill up
+  reduces but does not eliminate leader bottleneck
+
+system-level / paxos-level optimization: mencius
+  stripe the log positions across all of the replicas
+  each replica is a designated leader for its positions in the log
+  replicas that have no pending operations will "skip" their slot: propose nop
+  - when to propose nop?
+  - what if some node dies?  another node times out, proposes nop.
+
+main limitations of mencius
+  fixed assignment of slots to nodes: good when all nodes to process ~even load
+  all nodes must contact all other nodes: can't advance log otherwise
+    might not be on the critical path for a single client operation
+    shows up when next client operation comes in: must hear about f-1 slots
+  slow failover: need to timeout on slots assigned to the failed replica
+
+does this matter?
+  maybe, if your paxos servers have different hardware, or have other load
+  maybe, if your replicas fail or get disconnected with some frequency
+  maybe, if your replicas are geographically distributed
+  what's the latency between data centers?
+    east coast -- west coast: ~80msec
+    west coast -- japan: ~100msec
+    east coast -- europe: ~80msec
+    west coast -- australia: ~150msec
+
+goals for epaxos [ Ref: Iulian Moraru's SOSP13 talk ]
+  1. high throughput, low latency
+  2. fast failure recovery
+  3. load balancing
+  4. use fastest replicas
+  5. use closest replicas (latency)
+
+how do the other plans stack up?
+  lab 3b: good 2-5, bad 1
+  multi-paxos: good 1, bad 2-5
+  mencius: bad 2, unclear 3+4 (if some replica is slow), good 1+5
+
+system-level / paxos-level optimization: epaxos
+  each replica has its own log of ops
+  replica has "pre-prepared" all slots in its log, like multi-paxos
+    one accept/accept-ok round-trip sufficient to agree on an op in a slot
+  no longer a single sequential log: order is unclear
+  each op comes with a dependency list: other ops that have to run before it
+
+where do the dependencies come from in epaxos?
+  issuing replica might know of the most recent conflicting ops
+  during first round of messages, acceptors might inform issuer about conflicts
+    acceptor looks at OTHER instances to detect conflicts
+  because of majority overlap, guaranteed to learn about conflicting ops
+  first round of messages: pre-accept / pre-accept-ok
+    pre-accept-ok response includes conflict list
+  if everyone agrees on conflict list, done; send decided msgs asynchronously
+
+when do two commands conflict?
+  interference: application-specified
+  e.g., kv store: same key
+  for different keys, order does not matter
+  promise made by the application to the epaxos system
+
+example of normal operation
+  client->S1: A
+  S1->S2,S3: pre-accept(A, deps_A={}); response deps_A={}
+  S1->client: A done
+
+  client->S5: B
+  S5->S3,S4: pre-accept(B, deps_B={});
+             response deps_B={} from S4, deps_B={A} from S3
+  S5->S3,S4: accept(B, deps_B={A})
+  S5->client: B done
+
+  client->S1: C
+  S1->S2,S3: pre-accept(C, deps_C={A});
+             response deps_C={A} from S2, deps_C={A,B} from S3
+  S1->S2,S3: accept(C, deps_C={A,B})
+  S1->client: C done
+
+why is the second phase (in figure 2) sometimes necessary and sometimes not?
+  if all responses are same, second phase not needed
+    quorum of servers remembers the pre-accept-ok response
+    if proposer crashes, recovery ensures that operation will go into the slot
+  if some responses differ, need to agree on what that slot held
+    in particular, deps and seq
+    proposer must ensure quorum learns the unique outcome
+    otherwise recovery might produce a different outcome
+  why is it a "fast-path" quorum when it's more than f+1?
+    because we can be done in a single RTT
+
+how big can the deps list get?
+  epaxos assumes dependencies are transitive
+  safe to include just the latest conflicting op from each replica
+
+what if messages get delayed, two conflicting ops switch their dependencies?
+  not a problem: clients issued them concurrently, either order is allowed
+  dependencies will ensure a consistent execution order on all replicas
+
+what if more dependencies arise after the second round of messages for op A?
+  they must have been told about A in response from at least one replica
+  will include A in their dependency list
+  must be reflexive: if A conflicts with B, then B conflicts with A
+
+can the dependency graph have cycles?
+  yes:
+    S1->S2: pre-accept A; response deps empty
+    S4->S2: pre-accept B; response deps A
+    S4->S3: pre-accept B; response deps empty
+    S1->S3: pre-accept A; response deps B
+  now deps_A={B} and deps_B={A}
+
+how to execute ops?  assume no cycles for now.
+  linearize the dependency graph: topological sort
+  execute ops in order of dependencies
+
+is it possible that a dependency has not been decided yet?
+  yes: proposer sent the op in a single pre-accept message, then crashed
+  what to do if the dependency is missing?
+    maybe wait a little bit, to see if it shows up
+    run the explicit prepare algorithm, to agree on a nop (or real op)
+
+what if the proposer was just slow, not really crashed?
+  epaxos's modified paxos protocol will detect it has to agree on the nop
+  must retry putting the desired op in the next available slot
+
+what if different replicas arrive at a different topological sort order?
+  fine: app promised order does not matter for non-conflicting ops
+
+how to deal with cycles?
+  compute strongly-connected components, execute entire SCCs in dep order
+  how to order operations within a strongly-connected component?
+    sequence number attached to each operation (in addition to deps list)
+
+what if SCC grows after some replica already executed some ops in that SCC?
+  cannot happen: deps list of all SCC members is fixed
+  before executing, must wait for agreement on all dependent ops
+  each of those ops has a fixed deps list
+  new ops can depend on the SCC, but that's fine: they come later
+
+can SCC grow after some op in SCC has been committed + replied to client?
+  yes
+  S1->S2: pre-accept(A, deps_A={}); reply deps_A={}
+  S2->S3: pre-accept(B, deps_B={A}); reply deps_B={A}
+  S1->S3: pre-accept(A, deps_A={}); reply deps_A={B}
+  S1->S2,S3: accept(A, deps_A={B})
+    S1 responds to client, A is done
+    client issues op C to S3
+  S3->S4: pre-accept(C, deps_C={A,B}); reply deps_C={A,B}
+  S2->S4: pre-accept(B, deps_B={A}); reply deps_B={A,C}
+  .. now A, B, C form an SCC, and this can continue to grow the SCC
+
+can we guarantee that A will run before C in this case?  (linearizability)
+  seq numbers
+  before A replies to client, A is committed, so has a stable seq#
+  C must observe A's seq# (by majority overlap), so C's seq# will be higher
+  when SCC is ordered by seq#, A will go first
+
+what's the answer to the lecture question (when does epaxos execute an op)?
+  in principle, no need to execute op until it's needed for some read
+    write ops can be put into a slot and acknowledged, no result needed
+    might want to proactively execute ops to reduce eventual read latency
+  must wait for a command to be committed
+    means stable command, stable dependency list
+  execute all of its dependencies first
+
+why does paxos need this weird f+floor((f+1)/2) fast-path quorum?
+  has to do with the recovery procedure (somewhat complicated, in tech report)
+  need 7 servers and 2 clients to demonstrate problem
+  suppose we did pre-accept (fast path) with traditional f+1 quorum
+
+  C1 -> S1: operation A
+        S1 -> S2,S3,S4: pre-accept A; response deps_A={}
+  C1 <- S1: ok
+        S1 crashes before sending decided messages
+
+  C1 -> C2: look, A executed
+
+  C2 -> S7: operation B
+        S7 -> S6,S5,S4: pre-accept B;
+                        response from S6,S5: deps_B={}
+                        response from S4: deps_B={A}
+        S7 crashes
+        S4 crashes
+
+  must execute A then B
+  but the state at remaining 4 servers (S2,S3,S5,S6) is symmetric
+    S2,S3: pre-accepted A, empty deps
+    S5,S6: pre-accepted B, empty deps
+  no idea which to execute first
+    might end up executing B then A: wrong!
+  f+floor((f+1)/2) quorum allows epaxos recovery to determine which goes first
+
+figure 4, right half (5 replicas)
+  EPaxos 0%
+    why is the latency in VA, CA, OR lower than JP and EU?
+    what sites does each replica have to talk to, in order to commit a command?
+      VA: CA, OR
+      CA: OR, VA
+      OR: CA, VA
+      EU: VA, CA [150ms]
+      JP: CA, OR [130ms]
+  EPaxos 100%
+    why is the latency double?
+      need second round after updating deps.
+    why is the latency not even higher?
+      might think that JP needs to execute ops from EU [300ms]
+      write operations: no need to execute before replying to client
+    execute latency is indeed a little higher: wait for decided msg on deps
+  why does multi-paxos sometimes have high latency?
+    clients have to talk to the designated leader, which might be far away
+    but for clients that are lucky (next to designated leader), latency is low
+  when does mencius have high latency?
+    clients can talk to their nearby replica
+    replica still has to know what happened in the other log slots
+    if all replicas are running commands, will run somewhat in sync
+    if only one replica is issuing commands, it has to poke other replicas
+
+figure 10: dealing with replica failure
+  why does multi-paxos drop to 0?
+    lost leader
+  why does mencius spike after a while?
+    each replica committed a bunch of commands in its own slots
+    after a timeout, failed replica's slots get filled with nop's
+  why does epaxos remain flat?
+    clients issue 10k req/s, servers can handle much more
+    system not saturated
+    must be that clients have a very short timeout, try another server
+  can we shorten the timeout in multi-paxos, mencius?
+    risk: false positives when replica didn't crash
+    multi-paxos: dueling leaders, undesirable situation
+    mencius: nops end up replacing real ops, slows down the replaced ops
+
+does epaxos matter if your replicas are all within a single datacenter?
+  figure 5: matters for small commands (16 bytes)
+  epaxos 0% wins over mencius due to sending fewer msgs
+  epaxos wins over multi-paxos because of leader CPU bottleneck
+
+references:
+  http://www.pdl.cmu.edu/PDL-FTP/associated/CMU-PDL-13-111.pdf
+  https://www.youtube.com/watch?v=KxoWlUZNKn8
+
