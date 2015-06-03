@@ -10,7 +10,7 @@ This is the course outline that we followed for the course:
 ## Week 1 (5/4)
   - Reading: [MapReduce](class_materials/readings/mapreduce.pdf)
   - Lecture Notes: [At-Most-Once RPC](class_materials/notes/l02.txt), [handout](class_materials/notes/l02-rpc-mutex.go)
-  - Homework: [Lab 1](sabs/lab-1.md) | [Part 1](class_materials/labs/lab-1.md#part-i-word-count)
+  - Homework: [Lab 1](class_materials/labs/lab-1.md) | [Part 1](class_materials/labs/lab-1.md#part-i-word-count)
   - Suggested class_materials/readings:
     - [Golang Getting Started](https://golang.org/doc/install)
     - [A tour of Go](https://tour.golang.org/welcome/1)
@@ -65,7 +65,7 @@ This is the course outline that we followed for the course:
 ## Week 8 (6/22)
   - Reading: [Epaxos: There Is More Consensus in Egalitarian Parliaments](class_materials/readings/epaxos.pdf)
     - Question: When will an EPaxos replica R execute a particular command C? Think about when commands are committed, command interference, read operations, etc.
-  - Homework: Begin [Lab 3](class_materials/labs/lab-3.md) | Part B
+  - Homework: [Lab 3](class_materials/labs/lab-3.md) | Begin Part B
 
 ## Week 9 (6/29)
   - Reading: [Spanner](class_materials/readings/spanner.pdf)
@@ -80,18 +80,18 @@ This is the course outline that we followed for the course:
 ## Week 11 (7/13)
   - Reading: Shared Virtual Memory (1986) && Treadmarks (1994)
     - Question: Memory Coherence in Shared Virtual Systems ivy-code.txt is a version of the code in Section 3.1 with some clarifications and bug fixes. The manager part of the WriteServer sends out invalidate messages, and waits for confirmation messages indicating that the invalidates have been received and processed. Suppose the manager send out invalidates, but did not wait for confirmations. Describe a scenario in which lack of the confirmation would cause the system to behave incorrectly. You should assume that the network delivers all messages, and that none of the computers fail.
-  - Homework: Begin [Lab 4](class_materials/labs/lab-4.md) | Part B
+  - Homework: [Lab 4](class_materials/labs/lab-4.md) | Begin Part B
 
 ## Week 12 (7/20)
   - Reading: Spark (2012)
   - Question: What applications can Spark support well that MapReduce/Hadoop cannot support?
-  - Homework: Continue [Lab 4](class_materials/labs/lab-4.md) | Part B
+  - Homework: [Lab 4](class_materials/labs/lab-4.md) | Continue Part B
 
 ## Week 13 (7/27)
   - Reading: Ficus (1994) && Bayou (1995)
     - Question About Ficus: Imagine a situation like the paper's Figure 1, but in which only Site A updates file Foo. What should Ficus do in that case when the partition is merged? Explain how Ficus could tell the difference between the situation in which both Site A and Site B update Foo, and the situation in which only Site A updates Foo.
     - Question Bayou: Suppose we build a distributed filesystem using Bayou, and the system has a copy operation. Initially, file A contains "foo" and file B contains "bar". On one node, a user copies file A to file B, overwriting the old contents of B. On another node, a user copies file B to file A. After both operations are committed, we want both files to contain "foo" or for both files to contain "bar". Sketch a dependency check and merge procedure for the copy operation that makes this work. How does Bayou ensure that all the nodes agree about whether A and B contain "foo" or "bar"?
-  - Homework: Finish [Lab 4](class_materials/labs/lab-4.md) | Part B
+  - Homework: [Lab 4](class_materials/labs/lab-4.md) | Finish Part B
 
 ## Week 14 (8/3)
   - Reading: PNUTS (2008) && Dynamo (2007)
