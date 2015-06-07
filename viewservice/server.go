@@ -14,26 +14,89 @@ type ViewServer struct {
 	dead bool
 	me   string
 
-	// Your declarations here.
+	currentView View
+	nextView    View
+	acked       bool
+	primary     time.Time
+	backup      time.Time
 }
 
 //
 // server Ping RPC handler.
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
+	if (vs.currentView.Viewnum == 0) {
+		// first server is automatically the primary
+		vs.currentView = View{
+			Viewnum:1,
+			Primary:args.Me,
+			Backup: "",
+		}
 
+		// initialize the nextView
+		vs.nextView = vs.currentView
+		vs.primary = time.Now()
+
+	} else if (args.Me == vs.currentView.Primary) {
+		// is the primary acking the current view?
+		if (args.Viewnum == vs.currentView.Viewnum) {
+			vs.primary = time.Now()
+			vs.acked = vs.currentView.Viewnum == vs.nextView.Viewnum
+			// mismatch means advance the view
+			if (!vs.acked) {
+				vs.currentView = vs.nextView
+			}
+		} else {
+			// primary's out of sync; promote the backup
+			vs.promote()
+		}
+
+	} else if (args.Me == vs.currentView.Backup && args.Viewnum == vs.currentView.Viewnum) {
+		// the backup is checking in; update checkin time
+		// accordingly: if he's being promoted, update primary
+		// time. otherwise, keep the backup time up to date
+		if (args.Me == vs.nextView.Primary && vs.acked) {
+			vs.currentView = vs.nextView
+			vs.primary = time.Now()
+			vs.acked = false
+		} else {
+			vs.backup = time.Now()
+		}
+
+	} else if (args.Me != vs.nextView.Primary && vs.nextView.Backup == "") {
+		// if there's no backup, promote the first
+		// non-allocated server to be the backup
+		vs.nextView.Viewnum = vs.currentView.Viewnum + 1
+		vs.nextView.Backup = args.Me
+		vs.backup = time.Now()
+	}
+
+	reply.View = vs.currentView
 	return nil
+}
+
+func (vs *ViewServer) promote() {
+	// no lock necessary as this is always called in a safe context
+	vs.nextView = View{
+		Viewnum:vs.currentView.Viewnum+1,
+		Primary:vs.currentView.Backup,
+		Backup:"",}
+
+	// last check-in by the new primary
+	vs.primary = vs.backup
 }
 
 //
 // server Get() RPC handler.
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
-
+	reply.View = vs.currentView
 	return nil
 }
 
@@ -43,8 +106,13 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 // accordingly.
 //
 func (vs *ViewServer) tick() {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
 
-	// Your code here.
+	since := time.Since(vs.primary)
+	if (since > MaxPingTime) {
+		vs.promote()
+	}
 }
 
 //
