@@ -3,7 +3,7 @@ package pbservice
 import "github.com/keathley/6.824/viewservice"
 import "net/rpc"
 
-//import "fmt"
+import "fmt"
 
 // You'll probably need to uncomment these:
 import "strconv"

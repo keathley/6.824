@@ -140,16 +140,6 @@ func (pb *PBServer) forwardRequest(args *PutArgs, reply *PutReply) bool {
 	return ok
 }
 
-func (pb *PBServer) forwardRequest(args *PutArgs) {
-	if view.Backup != "" {
-		var reply PutReply
-		ok := call(view.Backup, "PBServer.ForcePut", args, &reply)
-		if !ok || reply.Err != OK {
-			pb.forwardRequest(args)
-		}
-	}
-}
-
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	DPrintf("%s Getting %s for %s from server %s (version %d)\n", pb.me, args.Key, args.Client, pb.me, args.Version)
 	//	DPrintf("Data:\n")
@@ -181,34 +171,39 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 
 func (pb *PBServer) updateCache(args interface{}, reply interface{}) {
 	//	DPrintf("Updating request cache...\n")
-	var lastState *ClientState
-	var cacheField *State
+	var cacheField string
 	var version int
 	var client, val string
 	input, ok := args.(*GetArgs)
 	output, ok := reply.(*GetReply)
 	if ok {
 		client = input.Client
-		cacheField = lastState.Get
+		cacheField = "Get"
 		version = input.Version
 		val = output.Value
 	} else {
 		input := args.(*PutArgs)
 		client = input.Client
-		cacheField = lastState.Put
+		cacheField = "Put"
 		output := reply.(*PutReply)
 		version = input.Version
 		val = output.PreviousValue
 	}
-	pb.putCache(client, &cacheField, version, val)
+	pb.putCache(client, cacheField, version, val)
 	//	DPrintf("New cache state: %s\n", lastState)
 }
 
-func (pb *PBServer) putCache(client string, field **State, version int, val string) {
+func (pb *PBServer) putCache(client string, field string, version int, val string) {
 	state := pb.getOrCreateCacheState(client)
 	pb.lock.Lock()
-	state.field.Version = version
-	state.field.Value = val
+	var stateField *State
+	if field == "Get" {
+		stateField = state.Get
+	} else {
+		stateField = state.Put
+	}
+	stateField.Version = version
+	stateField.Value = val
 	pb.requestLog[client] = state
 	pb.lock.Unlock()
 }
