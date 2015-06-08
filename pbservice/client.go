@@ -2,26 +2,37 @@ package pbservice
 
 import "github.com/keathley/6.824/viewservice"
 import "net/rpc"
-import "fmt"
+
+//import "fmt"
 
 // You'll probably need to uncomment these:
-// import "time"
-// import "crypto/rand"
-// import "math/big"
+import "strconv"
+import "time"
+import "crypto/rand"
+import "math/big"
 
 type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
-	me    string
-	opnum uint
+	me     string
+	getnum int
+	putnum int
 }
 
 func MakeClerk(vshost string, me string) *Clerk {
 	ck := new(Clerk)
 	ck.vs = viewservice.MakeClerk(me, vshost)
 	// Your ck.* initializations here
-	ck.me = me
+	ck.me = strconv.FormatInt(nrand(), 10)
+	ck.getnum = 1
+	ck.putnum = 1
 	return ck
+}
+func nrand() int64 {
+	max := big.NewInt(int64(10000000))
+	bigx, _ := rand.Int(rand.Reader, max)
+	x := bigx.Int64()
+	return x
 }
 
 //
@@ -65,10 +76,41 @@ func call(srv string, rpcname string,
 // says the key doesn't exist (has never been Put().
 //
 func (ck *Clerk) Get(key string) string {
+	args := &GetArgs{key, ck.getnum, ck.me}
+	var reply GetReply
+	ck.doGet(args, &reply)
+	ck.getnum++
+	return reply.Value
+}
 
-	// Your code here.
+func (ck *Clerk) doGet(args *GetArgs, reply *GetReply) {
+	for {
+		//		DPrintf("Trying Get...\n")
+		view, ok := ck.vs.Get()
+		if ok {
+			ok = call(view.Primary, "PBServer.Get", args, reply)
+			//			DPrintf("Reply: %s\n", reply)
+		}
+		if reply.Err == OK || reply.Err == ErrNoKey {
+			break
+		}
+		time.Sleep(viewservice.PingInterval)
+	}
+}
 
-	return "???"
+func (ck *Clerk) doPut(args *PutArgs, reply *PutReply) {
+	for {
+		//		DPrintf("Trying Put...\n")
+		view, ok := ck.vs.Get()
+		if ok {
+			call(view.Primary, "PBServer.Put", args, reply)
+			//			DPrintf("Reply: %s\n", reply)
+		}
+		if reply.Err == OK {
+			break
+		}
+		time.Sleep(viewservice.PingInterval)
+	}
 }
 
 //
@@ -76,9 +118,11 @@ func (ck *Clerk) Get(key string) string {
 // must keep trying until it succeeds.
 //
 func (ck *Clerk) PutExt(key string, value string, dohash bool) string {
-
-	// Your code here.
-	return "???"
+	args := &PutArgs{key, value, dohash, ck.putnum, ck.me}
+	var reply PutReply
+	ck.doPut(args, &reply)
+	ck.putnum++
+	return reply.PreviousValue
 }
 
 func (ck *Clerk) Put(key string, value string) {

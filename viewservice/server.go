@@ -28,8 +28,8 @@ type ViewServer struct {
 //
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 
-	DPrintf("Ping from %v with view %d when server's view is %d\n",
-		args.Me, args.Viewnum, vs.view.Viewnum)
+	//DPrintf("Ping from %v with view %d when server's view is %d\n",
+	//args.Me, args.Viewnum, vs.view.Viewnum)
 	vs.mu.Lock()
 	var err error
 	err = nil
@@ -40,7 +40,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 	} else {
 		reply.View = vs.ackedView
 	}
-	DPrintf("Responded to ping with view %d\n", reply.View.Viewnum)
+	DPrintf("Responded to ping from %v (view %d) with view %s\n", args.Me, args.Viewnum, viewAsString(reply.View))
 	vs.mu.Unlock()
 	return err
 }
@@ -98,7 +98,7 @@ func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
 func (vs *ViewServer) tick() {
 
 	// Your code here.
-	DPrintln("Tick...")
+	//	DPrintln("Tick...")
 	vs.mu.Lock()
 	vs.validateView(vs.isDead)
 	vs.mu.Unlock()
@@ -129,8 +129,8 @@ func (vs *ViewServer) validateView(check validator) {
 		return
 	}
 	vs.markStaleClients()
-	DPrintf("Before view validation: \n\tCurrent: %s\n\tAcked: %s\n",
-		viewAsString(vs.view), viewAsString(vs.ackedView))
+	//	DPrintf("Before view validation: \n\tCurrent: %s\n\tAcked: %s\n",
+	//		viewAsString(vs.view), viewAsString(vs.ackedView))
 
 	backup := vs.view.Backup
 	primary := vs.view.Primary
@@ -148,8 +148,8 @@ func (vs *ViewServer) validateView(check validator) {
 
 		}
 	}
-	DPrintf("After view validation: \n\tCurrent: %s\n\tAcked: %s\n",
-		viewAsString(vs.view), viewAsString(vs.ackedView))
+	//	DPrintf("After view validation: \n\tCurrent: %s\n\tAcked: %s\n",
+	//		viewAsString(vs.view), viewAsString(vs.ackedView))
 }
 
 // Validation check to see if the client's last ping singalled a crash and reboot
