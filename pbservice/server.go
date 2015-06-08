@@ -140,6 +140,16 @@ func (pb *PBServer) forwardRequest(args *PutArgs, reply *PutReply) bool {
 	return ok
 }
 
+func (pb *PBServer) forwardRequest(args *PutArgs) {
+	if view.Backup != "" {
+		var reply PutReply
+		ok := call(view.Backup, "PBServer.ForcePut", args, &reply)
+		if !ok || reply.Err != OK {
+			pb.forwardRequest(args)
+		}
+	}
+}
+
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	DPrintf("%s Getting %s for %s from server %s (version %d)\n", pb.me, args.Key, args.Client, pb.me, args.Version)
 	//	DPrintf("Data:\n")
